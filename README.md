@@ -2,6 +2,8 @@
 
 A high-performance C++ plugin with Qt UI for managing Extra Attributes (custom/dynamic attributes) in Autodesk Maya.
 
+<img width="1199" height="634" alt="image" src="https://github.com/user-attachments/assets/45351b86-577b-45d6-abc0-229ceb06fcaf" />
+
 ## Features
 
 ### Core Capabilities
