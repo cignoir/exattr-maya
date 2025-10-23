@@ -1,0 +1,22 @@
+// Create shelf button for Extra Attribute Editor
+// Usage: Run in Maya's Script Editor
+
+global proc createExtraAttrShelfButton() {
+    // Get current shelf
+    global string $gShelfTopLevel;
+    string $currentShelf = `tabLayout -query -selectTab $gShelfTopLevel`;
+
+    // Add shelf button
+    shelfButton
+        -command "exAttrEditor -ui"
+        -annotation "Open Extra Attribute Editor"
+        -label "ExAttr"
+        -image1 "menuIconAttributes.png"
+        -imageOverlayLabel "ExAttr"
+        -parent $currentShelf;
+
+    print "// Extra Attribute Editor shelf button created.\n";
+}
+
+// Execute
+createExtraAttrShelfButton();

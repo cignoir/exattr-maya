@@ -1,0 +1,94 @@
+// Script to add Extra Attribute Editor menu item
+// This script can be executed automatically or manually after plugin load
+
+global proc addExtraAttrMenu() {
+    // Add to Windows > General Editors menu
+    global string $gMainWindow;
+
+    // Get main window menu
+    string $windowMenu = $gMainWindow + "|mainWindowMenu";
+
+    if (!`menu -exists $windowMenu`) {
+        warning "Window menu not found";
+        return;
+    }
+
+    // Find General Editors menu item
+    string $menuItems[] = `menu -q -itemArray $windowMenu`;
+    string $generalEditorsItem = "";
+
+    for ($item in $menuItems) {
+        string $label = `menuItem -q -label $item`;
+        if ($label == "General Editors") {
+            $generalEditorsItem = $item;
+            break;
+        }
+    }
+
+    if ($generalEditorsItem == "") {
+        warning "General Editors menu not found";
+        return;
+    }
+
+    // Get General Editors submenu
+    string $subMenu = `menuItem -q -subMenu $generalEditorsItem`;
+
+    if ($subMenu == "") {
+        warning "General Editors submenu not found";
+        return;
+    }
+
+    // Delete existing menu item if it exists
+    if (`menuItem -exists ExtraAttrEditorMenuItem`) {
+        deleteUI -menuItem ExtraAttrEditorMenuItem;
+    }
+
+    // Set submenu as parent
+    setParent -menu $subMenu;
+
+    // Insert after Attribute Editor
+    string $subMenuItems[] = `menu -q -itemArray $subMenu`;
+    string $attributeEditorItem = "";
+
+    for ($item in $subMenuItems) {
+        string $label = `menuItem -q -label $item`;
+        if ($label == "Attribute Editor") {
+            $attributeEditorItem = $item;
+            break;
+        }
+    }
+
+    // Add menu item
+    if ($attributeEditorItem != "") {
+        menuItem -insertAfter $attributeEditorItem
+                 -label "Extra Attribute Editor..."
+                 -command "exAttrEditor -ui"
+                 -annotation "Edit custom attributes in the scene"
+                 ExtraAttrEditorMenuItem;
+        print "// Extra Attribute Editor menu added after Attribute Editor\n";
+    } else {
+        // Add at the end if Attribute Editor is not found
+        menuItem -label "Extra Attribute Editor..."
+                 -command "exAttrEditor -ui"
+                 -annotation "Edit custom attributes in the scene"
+                 ExtraAttrEditorMenuItem;
+        print "// Extra Attribute Editor menu added to General Editors\n";
+    }
+}
+
+global proc removeExtraAttrMenu() {
+    if (`menuItem -exists ExtraAttrEditorMenuItem`) {
+        deleteUI -menuItem ExtraAttrEditorMenuItem;
+        print "// Extra Attribute Editor menu removed\n";
+    }
+}
+
+// Callback automatically invoked when plugin is loaded
+global proc exAttrManagerPluginLoaded() {
+    addExtraAttrMenu();
+}
+
+// Callback automatically invoked when plugin is unloaded
+global proc exAttrManagerPluginUnloaded() {
+    removeExtraAttrMenu();
+}

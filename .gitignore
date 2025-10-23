@@ -1,0 +1,62 @@
+# Build directories
+build/
+out/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.vcxproj.filters
+*.vcxproj.user
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled binaries
+*.mll
+*.dll
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+
+# Qt generated files
+*_autogen/
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Maya files (optional - uncomment if you want to ignore test scenes)
+# *.ma
+# *.mb
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
