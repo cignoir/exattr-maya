@@ -1,210 +1,233 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Extra Attribute Editor for Maya - A high-performance plugin for managing custom attributes, dynamic attributes, and extra attributes in Autodesk Maya 2025. Free and open source.">
-    <meta name="keywords" content="Maya extra attributes, Maya custom attributes, Maya dynamic attributes, Maya plugin, Maya attribute editor, Autodesk Maya, Maya 2025, attribute manager, Maya tools, VFX tools, animation tools, rigging tools, game development, Maya pipeline">
+    <meta name="description" content="Extra Attribute Editor for Maya - Maya用カスタムアトリビュート管理プラグイン。シーン全体のカスタム属性を高速スキャン、一括編集。無料・オープンソース。">
+    <meta name="keywords" content="Maya extra attributes, Maya custom attributes, Maya plugin, Autodesk Maya, Maya 2025">
     <meta name="author" content="cignoir">
-    <title>Extra Attribute Editor for Maya - Custom Attribute Manager Plugin</title>
+    <title>Extra Attribute Editor for Maya</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #f6f8fa;
+            font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            line-height: 1.8;
+            -webkit-font-smoothing: antialiased;
         }
-        header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 60px 20px;
-            text-align: center;
-        }
-        header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        header p {
-            font-size: 1.2em;
-            opacity: 0.9;
-        }
+
         .container {
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
-            padding: 40px 20px;
+            padding: 80px 24px;
         }
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 30px;
-            margin: 40px 0;
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            color: #000000;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
         }
-        .feature-card {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+
+        .subtitle {
+            font-size: 1rem;
+            font-weight: 300;
+            color: #666666;
+            margin-bottom: 3rem;
         }
-        .feature-card h3 {
-            color: #667eea;
-            margin-bottom: 15px;
+
+        .card {
+            background-color: #f8f8f8;
+            padding: 2.5rem;
+            border-radius: 4px;
+            margin-bottom: 2rem;
         }
-        .cta-section {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            text-align: center;
-            margin: 40px 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+
+        h2 {
+            font-size: 1.25rem;
+            font-weight: 400;
+            color: #000000;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #e0e0e0;
         }
+
+        p {
+            margin-bottom: 1rem;
+            font-weight: 300;
+        }
+
+        ul {
+            margin-bottom: 1.5rem;
+            margin-left: 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+        }
+
+        a {
+            color: #000000;
+            text-decoration: none;
+            border-bottom: 1px solid #cccccc;
+            transition: border-color 0.2s;
+        }
+
+        a:hover {
+            border-bottom-color: #000000;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
         .btn {
             display: inline-block;
-            padding: 15px 30px;
-            background: #667eea;
-            color: white;
+            padding: 0.75rem 1.5rem;
+            background-color: #000000;
+            color: #ffffff;
             text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            margin: 10px;
-            transition: background 0.3s;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 400;
+            transition: background-color 0.2s;
+            border-bottom: none;
         }
+
         .btn:hover {
-            background: #5568d3;
+            background-color: #333333;
         }
+
         .btn-secondary {
-            background: #764ba2;
+            background-color: #ffffff;
+            color: #000000;
+            border: 1px solid #000000;
         }
+
         .btn-secondary:hover {
-            background: #653a8c;
+            background-color: #f8f8f8;
         }
-        .search-terms {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            margin: 40px 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+
+        .screenshot {
+            width: 100%;
+            margin: 2rem 0;
+            border: 1px solid #e0e0e0;
         }
-        .search-terms h2 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-        .search-terms ul {
-            list-style: none;
+
+        .specs {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
         }
-        .search-terms li {
-            padding: 10px;
-            background: #f6f8fa;
-            border-radius: 4px;
+
+        .spec-item {
+            font-size: 0.9rem;
         }
+
+        .spec-label {
+            font-weight: 400;
+            color: #666666;
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .spec-value {
+            font-weight: 300;
+            color: #000000;
+        }
+
         footer {
             text-align: center;
-            padding: 40px 20px;
-            background: #24292e;
-            color: white;
-            margin-top: 60px;
+            padding: 3rem 0;
+            font-size: 0.85rem;
+            color: #999999;
+            font-weight: 300;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 40px 20px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .card {
+                padding: 1.5rem;
+            }
+
+            .buttons {
+                flex-direction: column;
+            }
+
+            .specs {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>Extra Attribute Editor for Maya</h1>
-        <p>High-performance Custom Attribute Manager for Autodesk Maya</p>
-    </header>
-
     <div class="container">
-        <div class="cta-section">
-            <h2>Free and Open Source Maya Plugin</h2>
-            <p style="margin: 20px 0;">Manage extra attributes, custom attributes, and dynamic attributes across your entire Maya scene</p>
-            <a href="https://github.com/cignoir/exattr-maya/releases" class="btn">Download Plugin</a>
-            <a href="https://github.com/cignoir/exattr-maya" class="btn btn-secondary">View on GitHub</a>
-        </div>
+        <h1>Extra Attribute Editor v1.0.1</h1>
+        <p class="subtitle">Mayaのカスタムアトリビュートを便利に管理するためのプラグイン</p>
 
-        <div style="text-align: center; margin: 40px 0;">
+        <div class="card">
+            <div class="buttons">
+                <a href="https://github.com/cignoir/exattr-maya/releases/download/v1.0.1/exattr-maya.zip" class="btn">ダウンロード</a>
+                <a href="https://github.com/cignoir/exattr-maya" class="btn btn-secondary">GitHub</a>
+            </div>
+
             <img src="https://github.com/user-attachments/assets/45351b86-577b-45d6-abc0-229ceb06fcaf"
-                 alt="Extra Attribute Editor for Maya - Screenshot showing dual-panel interface with attribute list and node values"
-                 style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
-            <p style="margin-top: 15px; color: #666; font-style: italic;">Scene-wide view of all extra attributes with dual-panel interface</p>
-        </div>
+                 alt="Extra Attribute Editor"
+                 class="screenshot">
 
-        <h2 style="text-align: center; margin: 40px 0 20px;">Key Features</h2>
-        <div class="features">
-            <div class="feature-card">
-                <h3>🚀 High Performance</h3>
-                <p>Scan and manage extra attributes across scenes with 10,000+ objects in just 3 seconds. Optimized C++ implementation with Qt UI.</p>
-            </div>
-            <div class="feature-card">
-                <h3>🔍 Scene-Wide View</h3>
-                <p>See all custom attributes in your scene at a glance. Find which nodes use specific attributes instantly.</p>
-            </div>
-            <div class="feature-card">
-                <h3>✏️ Batch Editing</h3>
-                <p>Edit attribute values across multiple nodes simultaneously. Type-aware editors for enum, boolean, numeric, and string attributes.</p>
-            </div>
-            <div class="feature-card">
-                <h3>🎯 Advanced Filtering</h3>
-                <p>Filter by attribute name, node name, node type, or value. Sort by any column with ascending/descending order.</p>
-            </div>
-            <div class="feature-card">
-                <h3>🎨 Smart Integration</h3>
-                <p>Automatically integrates into Maya's menu system. Auto-expands outliner hierarchy when selecting nodes or materials.</p>
-            </div>
-            <div class="feature-card">
-                <h3>🛠️ Production Ready</h3>
-                <p>Full undo/redo support, non-destructive operations, and safe attribute management for production environments.</p>
-            </div>
-        </div>
-
-        <div class="search-terms">
-            <h2>What can you do with Extra Attributes in Maya?</h2>
+            <h2>主な機能</h2>
             <ul>
-                <li>✓ Store game engine export data</li>
-                <li>✓ Add custom rigging parameters</li>
-                <li>✓ Track pipeline metadata</li>
-                <li>✓ Manage animation properties</li>
-                <li>✓ Control custom shaders</li>
-                <li>✓ Store asset information</li>
-                <li>✓ Add versioning data</li>
-                <li>✓ Define custom behaviors</li>
+                <li>シーン全体のカスタムアトリビュートを高速スキャン</li>
+                <li>カスタムアトリビュートが設定されたノードのバッチ編集</li>
+                <li>フィルター・ソート機能搭載</li>
+                <li>カスタムアトリビュートが設定されたマテリアルからアサインされたポリゴンをまとめて選択</li>
             </ul>
-        </div>
 
-        <div class="search-terms">
-            <h2>Compatible with Maya Custom Attribute Workflows</h2>
-            <ul>
-                <li>✓ Maya 2025 and later</li>
-                <li>✓ Windows 10/11 (64-bit)</li>
-                <li>✓ All Maya attribute types</li>
-                <li>✓ String, Integer, Float, Enum</li>
-                <li>✓ Boolean and Array attributes</li>
-                <li>✓ Material custom properties</li>
-                <li>✓ Transform and shape nodes</li>
-                <li>✓ Shading node attributes</li>
-            </ul>
-        </div>
+            <h2>技術仕様</h2>
+            <div class="specs">
+                <div class="spec-item">
+                    <div class="spec-label">対応バージョン</div>
+                    <div class="spec-value">Maya 2025 以降</div>
+                </div>
+                <div class="spec-item">
+                    <div class="spec-label">プラットフォーム</div>
+                    <div class="spec-value">Windows 10/11</div>
+                </div>
+                <div class="spec-item">
+                    <div class="spec-label">ライセンス</div>
+                    <div class="spec-value">MIT License</div>
+                </div>
+            </div>
 
-        <div class="cta-section">
-            <h2>Get Started with Extra Attribute Editor</h2>
-            <p style="margin: 20px 0;">Download the plugin, copy to your Maya plug-ins folder, and start managing custom attributes efficiently.</p>
-            <a href="https://github.com/cignoir/exattr-maya#installation" class="btn">Installation Guide</a>
-            <a href="https://github.com/cignoir/exattr-maya#usage" class="btn btn-secondary">Usage Documentation</a>
+            <p style="margin-top: 2rem; color: #999999; font-size: 0.9rem;">© 2025 cignoir</p>
         </div>
     </div>
 
     <footer>
-        <p>&copy; 2025 cignoir</p>
-        <p style="margin-top: 10px;">
-            <a href="https://github.com/cignoir/exattr-maya" style="color: #58a6ff;">GitHub Repository</a> |
-            <a href="https://github.com/cignoir/exattr-maya/issues" style="color: #58a6ff;">Report Issues</a> |
-            <a href="https://github.com/cignoir/exattr-maya/releases" style="color: #58a6ff;">Download</a>
-        </p>
+        <a href="https://github.com/cignoir/exattr-maya">GitHub</a> ·
+        <a href="https://github.com/cignoir/exattr-maya/issues">問題を報告</a> ·
+        <a href="https://github.com/cignoir/exattr-maya/releases">Releases</a>
     </footer>
 </body>
 </html>
