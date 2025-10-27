@@ -278,7 +278,7 @@ void ExtraAttrUI::setupUI()
     connect(m_nodeTableView, &QTableView::customContextMenuRequested,
             this, &ExtraAttrUI::onNodeContextMenu);
 
-    connect(m_nodeTableView->selectionModel(), &QItemSelectionModel::currentChanged,
+    connect(m_nodeTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &ExtraAttrUI::onNodeSelectionChanged);
 
     connect(m_nodeModel, &NodeAttributeModel::valueChanged,
@@ -455,8 +455,19 @@ void ExtraAttrUI::onNodeContextMenu(const QPoint& pos)
         return;
     }
 
+    // Get selected node name
+    QModelIndex sourceIndex = m_nodeProxyModel->mapToSource(index);
+    QString nodeName = m_nodeModel->getNodeName(sourceIndex.row());
+
     QMenu menu(this);
     QAction* selectAction = menu.addAction("Select Node in Maya");
+
+    // Add polygon selection option if node is a material
+    QAction* selectPolygonsAction = nullptr;
+    if (isShadingNode(nodeName)) {
+        selectPolygonsAction = menu.addAction("Select Assigned Polygons");
+    }
+
     QAction* deleteAction = menu.addAction("Delete Attribute from This Node...");
     menu.addSeparator();
     QAction* batchAction = menu.addAction("Batch Edit Selected Nodes...");
@@ -465,6 +476,8 @@ void ExtraAttrUI::onNodeContextMenu(const QPoint& pos)
 
     if (selectedAction == selectAction) {
         onSelectNode();
+    } else if (selectedAction == selectPolygonsAction && selectPolygonsAction) {
+        onSelectAssignedPolygons();
     } else if (selectedAction == deleteAction) {
         onDeleteAttribute();
     } else if (selectedAction == batchAction) {
@@ -839,6 +852,191 @@ bool ExtraAttrUI::selectNodeInMaya(const QString& nodeName)
     return true;
 }
 
+bool ExtraAttrUI::isShadingNode(const QString& nodeName)
+{
+    MStatus status;
+    MSelectionList selList;
+    status = selList.add(nodeName.toUtf8().constData());
+    if (status != MS::kSuccess) {
+        return false;
+    }
+
+    MObject nodeObj;
+    status = selList.getDependNode(0, nodeObj);
+    if (status != MS::kSuccess || nodeObj.isNull()) {
+        return false;
+    }
+
+    MFnDependencyNode fnDep(nodeObj, &status);
+    if (status != MS::kSuccess) {
+        return false;
+    }
+
+    MString nodeType = fnDep.typeName(&status);
+    if (status != MS::kSuccess) {
+        return false;
+    }
+
+    // Check if it's a shading-related node
+    if (nodeType == "lambert" ||
+        nodeType == "blinn" ||
+        nodeType == "phong" ||
+        nodeType == "phongE" ||
+        nodeType == "anisotropic" ||
+        nodeType == "standardSurface" ||
+        nodeType == "aiStandardSurface" ||
+        nodeType == "shadingEngine" ||
+        nodeType.indexW("shader") >= 0 ||
+        nodeType.indexW("material") >= 0 ||
+        nodeType.indexW("texture") >= 0) {
+        return true;
+    }
+
+    return false;
+}
+
+bool ExtraAttrUI::selectPolygonsWithMaterial(const QString& materialName)
+{
+    // Use Python to select polygons assigned to this material
+    // This handles face assignments properly, supporting multiple materials per mesh
+    MString pythonCmd = "import maya.cmds as mc\n";
+    pythonCmd += "material = '" + MString(materialName.toUtf8().constData()) + "'\n";
+    pythonCmd += "try:\n";
+    pythonCmd += "    # Find shading engines connected to this material\n";
+    pythonCmd += "    shading_engines = []\n";
+    pythonCmd += "    if mc.objectType(material) == 'shadingEngine':\n";
+    pythonCmd += "        shading_engines = [material]\n";
+    pythonCmd += "    else:\n";
+    pythonCmd += "        connections = mc.listConnections(material, type='shadingEngine', destination=True) or []\n";
+    pythonCmd += "        shading_engines = list(set(connections))\n";
+    pythonCmd += "    \n";
+    pythonCmd += "    if not shading_engines:\n";
+    pythonCmd += "        print('No shading engines found for material: ' + material)\n";
+    pythonCmd += "        mc.select(clear=True)\n";
+    pythonCmd += "    else:\n";
+    pythonCmd += "        # Get all faces assigned to these shading engines\n";
+    pythonCmd += "        face_list = []\n";
+    pythonCmd += "        for sg in shading_engines:\n";
+    pythonCmd += "            try:\n";
+    pythonCmd += "                members = mc.sets(sg, query=True) or []\n";
+    pythonCmd += "                for member in members:\n";
+    pythonCmd += "                    # Check if it's a face component (e.g., 'pCube1.f[0:5]')\n";
+    pythonCmd += "                    if '.f[' in member:\n";
+    pythonCmd += "                        face_list.append(member)\n";
+    pythonCmd += "                    # If it's a whole mesh shape, convert to all faces\n";
+    pythonCmd += "                    elif mc.objectType(member, isAType='mesh'):\n";
+    pythonCmd += "                        # Get the number of faces\n";
+    pythonCmd += "                        face_count = mc.polyEvaluate(member, face=True)\n";
+    pythonCmd += "                        if face_count > 0:\n";
+    pythonCmd += "                            face_list.append(member + '.f[0:' + str(face_count-1) + ']')\n";
+    pythonCmd += "                    # If it's a transform node, get its shape and convert to faces\n";
+    pythonCmd += "                    elif mc.objectType(member, isAType='transform'):\n";
+    pythonCmd += "                        shapes = mc.listRelatives(member, shapes=True, type='mesh') or []\n";
+    pythonCmd += "                        for shape in shapes:\n";
+    pythonCmd += "                            face_count = mc.polyEvaluate(shape, face=True)\n";
+    pythonCmd += "                            if face_count > 0:\n";
+    pythonCmd += "                                face_list.append(shape + '.f[0:' + str(face_count-1) + ']')\n";
+    pythonCmd += "            except Exception as e:\n";
+    pythonCmd += "                print('Error processing shading engine ' + sg + ': ' + str(e))\n";
+    pythonCmd += "        \n";
+    pythonCmd += "        if face_list:\n";
+    pythonCmd += "            mc.select(face_list, replace=True)\n";
+    pythonCmd += "            print('Selected ' + str(len(face_list)) + ' face component(s) with material: ' + material)\n";
+    pythonCmd += "        else:\n";
+    pythonCmd += "            print('No polygons found for material: ' + material)\n";
+    pythonCmd += "            mc.select(clear=True)\n";
+    pythonCmd += "except Exception as e:\n";
+    pythonCmd += "    print('Error selecting polygons for material: ' + str(e))\n";
+    pythonCmd += "    mc.select(clear=True)\n";
+
+    MStatus status = MGlobal::executePythonCommand(pythonCmd);
+    return (status == MS::kSuccess);
+}
+
+void ExtraAttrUI::onSelectAssignedPolygons()
+{
+    QModelIndexList selectedRows = m_nodeTableView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty()) {
+        QMessageBox::information(this, "Select Polygons", "Please select at least one material node.");
+        return;
+    }
+
+    // Collect all material names
+    QStringList materialNames;
+    for (const QModelIndex& index : selectedRows) {
+        QModelIndex sourceIndex = m_nodeProxyModel->mapToSource(index);
+        QString nodeName = m_nodeModel->getNodeName(sourceIndex.row());
+        if (isShadingNode(nodeName)) {
+            materialNames.append(nodeName);
+        }
+    }
+
+    if (materialNames.isEmpty()) {
+        QMessageBox::information(this, "Select Polygons", "No material nodes selected.");
+        return;
+    }
+
+    // Build Python command to select polygons for all materials
+    MString pythonCmd = "import maya.cmds as mc\n";
+    pythonCmd += "materials = [";
+    for (int i = 0; i < materialNames.size(); ++i) {
+        pythonCmd += "'" + MString(materialNames[i].toUtf8().constData()) + "'";
+        if (i < materialNames.size() - 1) {
+            pythonCmd += ", ";
+        }
+    }
+    pythonCmd += "]\n";
+    pythonCmd += "try:\n";
+    pythonCmd += "    all_faces = []\n";
+    pythonCmd += "    for material in materials:\n";
+    pythonCmd += "        # Find shading engines connected to this material\n";
+    pythonCmd += "        shading_engines = []\n";
+    pythonCmd += "        if mc.objectType(material) == 'shadingEngine':\n";
+    pythonCmd += "            shading_engines = [material]\n";
+    pythonCmd += "        else:\n";
+    pythonCmd += "            connections = mc.listConnections(material, type='shadingEngine', destination=True) or []\n";
+    pythonCmd += "            shading_engines = list(set(connections))\n";
+    pythonCmd += "        \n";
+    pythonCmd += "        # Get all faces assigned to these shading engines\n";
+    pythonCmd += "        for sg in shading_engines:\n";
+    pythonCmd += "            try:\n";
+    pythonCmd += "                members = mc.sets(sg, query=True) or []\n";
+    pythonCmd += "                for member in members:\n";
+    pythonCmd += "                    # Check if it's a face component (e.g., 'pCube1.f[0:5]')\n";
+    pythonCmd += "                    if '.f[' in member:\n";
+    pythonCmd += "                        all_faces.append(member)\n";
+    pythonCmd += "                    # If it's a whole mesh shape, convert to all faces\n";
+    pythonCmd += "                    elif mc.objectType(member, isAType='mesh'):\n";
+    pythonCmd += "                        face_count = mc.polyEvaluate(member, face=True)\n";
+    pythonCmd += "                        if face_count > 0:\n";
+    pythonCmd += "                            all_faces.append(member + '.f[0:' + str(face_count-1) + ']')\n";
+    pythonCmd += "                    # If it's a transform node, get its shape and convert to faces\n";
+    pythonCmd += "                    elif mc.objectType(member, isAType='transform'):\n";
+    pythonCmd += "                        shapes = mc.listRelatives(member, shapes=True, type='mesh') or []\n";
+    pythonCmd += "                        for shape in shapes:\n";
+    pythonCmd += "                            face_count = mc.polyEvaluate(shape, face=True)\n";
+    pythonCmd += "                            if face_count > 0:\n";
+    pythonCmd += "                                all_faces.append(shape + '.f[0:' + str(face_count-1) + ']')\n";
+    pythonCmd += "            except Exception as e:\n";
+    pythonCmd += "                print('Error processing shading engine ' + sg + ': ' + str(e))\n";
+    pythonCmd += "    \n";
+    pythonCmd += "    if all_faces:\n";
+    pythonCmd += "        mc.select(all_faces, replace=True)\n";
+    pythonCmd += "        print('Selected ' + str(len(all_faces)) + ' face component(s) from ' + str(len(materials)) + ' material(s)')\n";
+    pythonCmd += "    else:\n";
+    pythonCmd += "        print('No polygons found for selected materials')\n";
+    pythonCmd += "        mc.select(clear=True)\n";
+    pythonCmd += "except Exception as e:\n";
+    pythonCmd += "    print('Error selecting polygons for materials: ' + str(e))\n";
+    pythonCmd += "    mc.select(clear=True)\n";
+
+    MStatus status = MGlobal::executePythonCommand(pythonCmd);
+    if (status != MS::kSuccess) {
+        QMessageBox::warning(this, "Select Polygons",
+                           QString("Failed to select polygons for selected materials."));
+    }
+}
+
 void ExtraAttrUI::onAttributeFilterChanged(const QString& text)
 {
     m_attributeProxyModel->setFilterFixedString(text);
@@ -851,22 +1049,116 @@ void ExtraAttrUI::onNodeFilterChanged(const QString& text)
     m_nodeProxyModel->setFilterFixedString(text);
 }
 
-void ExtraAttrUI::onNodeSelectionChanged(const QModelIndex& current, const QModelIndex& previous)
+void ExtraAttrUI::onNodeSelectionChanged(const QItemSelection& selected, const QItemSelection& deselected)
 {
-    Q_UNUSED(previous);
+    Q_UNUSED(deselected);
 
-    if (!current.isValid()) {
+    QModelIndexList selectedRows = m_nodeTableView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty()) {
         return;
     }
 
-    QModelIndex sourceIndex = m_nodeProxyModel->mapToSource(current);
+    // Collect all selected node names
+    QStringList nodeNames;
+    QStringList materialNames;
 
-    QString nodeName = m_nodeModel->getNodeName(sourceIndex.row());
-    if (nodeName.isEmpty()) {
+    for (const QModelIndex& index : selectedRows) {
+        QModelIndex sourceIndex = m_nodeProxyModel->mapToSource(index);
+        QString nodeName = m_nodeModel->getNodeName(sourceIndex.row());
+        if (!nodeName.isEmpty()) {
+            nodeNames.append(nodeName);
+            if (isShadingNode(nodeName)) {
+                materialNames.append(nodeName);
+            }
+        }
+    }
+
+    if (nodeNames.isEmpty()) {
         return;
     }
 
-    selectNodeInMaya(nodeName);
+    // If all selected nodes are materials, select objects assigned to those materials
+    if (!materialNames.isEmpty() && materialNames.size() == nodeNames.size()) {
+        // All selected nodes are materials - select their assigned objects
+        MString pythonCmd = "import maya.cmds as mc\n";
+        pythonCmd += "materials = [";
+        for (int i = 0; i < materialNames.size(); ++i) {
+            pythonCmd += "'" + MString(materialNames[i].toUtf8().constData()) + "'";
+            if (i < materialNames.size() - 1) {
+                pythonCmd += ", ";
+            }
+        }
+        pythonCmd += "]\n";
+        pythonCmd += "try:\n";
+        pythonCmd += "    # First, enable 'Assigned Materials' display in all outliners\n";
+        pythonCmd += "    outliner_panels = mc.getPanel(type='outlinerPanel')\n";
+        pythonCmd += "    if outliner_panels:\n";
+        pythonCmd += "        for panel in outliner_panels:\n";
+        pythonCmd += "            outliner = mc.outlinerPanel(panel, query=True, outlinerEditor=True)\n";
+        pythonCmd += "            if outliner:\n";
+        pythonCmd += "                mc.outlinerEditor(outliner, edit=True, showAssignedMaterials=True)\n";
+        pythonCmd += "    # Find objects assigned to these materials\n";
+        pythonCmd += "    objects = []\n";
+        pythonCmd += "    for material in materials:\n";
+        pythonCmd += "        shading_engines = []\n";
+        pythonCmd += "        if mc.objectType(material) == 'shadingEngine':\n";
+        pythonCmd += "            shading_engines = [material]\n";
+        pythonCmd += "        else:\n";
+        pythonCmd += "            connections = mc.listConnections(material, type='shadingEngine', destination=True) or []\n";
+        pythonCmd += "            shading_engines = list(set(connections))\n";
+        pythonCmd += "        for sg in shading_engines:\n";
+        pythonCmd += "            try:\n";
+        pythonCmd += "                members = mc.sets(sg, query=True) or []\n";
+        pythonCmd += "                for member in members:\n";
+        pythonCmd += "                    if mc.objectType(member, isAType='shape'):\n";
+        pythonCmd += "                        transforms = mc.listRelatives(member, parent=True, fullPath=True) or []\n";
+        pythonCmd += "                        objects.extend(transforms)\n";
+        pythonCmd += "                    elif mc.objectType(member, isAType='transform'):\n";
+        pythonCmd += "                        objects.append(member)\n";
+        pythonCmd += "            except Exception as e:\n";
+        pythonCmd += "                print('Error processing shading engine: ' + str(e))\n";
+        pythonCmd += "    # Select objects and expand in outliner\n";
+        pythonCmd += "    if objects:\n";
+        pythonCmd += "        mc.select(objects, replace=True)\n";
+        pythonCmd += "        outliner_panels = mc.getPanel(type='outlinerPanel')\n";
+        pythonCmd += "        if outliner_panels:\n";
+        pythonCmd += "            for panel in outliner_panels:\n";
+        pythonCmd += "                outliner = mc.outlinerPanel(panel, query=True, outlinerEditor=True)\n";
+        pythonCmd += "                if outliner:\n";
+        pythonCmd += "                    mc.outlinerEditor(outliner, edit=True, showSelected=True)\n";
+        pythonCmd += "    else:\n";
+        pythonCmd += "        mc.select(materials, replace=True)\n";
+        pythonCmd += "except Exception as e:\n";
+        pythonCmd += "    print('Error selecting objects for materials: ' + str(e))\n";
+
+        MGlobal::executePythonCommand(pythonCmd);
+    } else {
+        // Mixed selection or all regular nodes - select them directly
+        MSelectionList selList;
+        MStatus status;
+
+        for (const QString& nodeName : nodeNames) {
+            status = selList.add(nodeName.toUtf8().constData());
+            if (status != MS::kSuccess) {
+                MGlobal::displayWarning("Failed to add node to selection: " + MString(nodeName.toUtf8().constData()));
+            }
+        }
+
+        if (selList.length() > 0) {
+            MGlobal::setActiveSelectionList(selList);
+
+            // Expand outliner to show selected nodes
+            MString pythonCmd =
+                "import maya.cmds as mc\n"
+                "outliner_panels = mc.getPanel(type='outlinerPanel')\n"
+                "if outliner_panels:\n"
+                "    for panel in outliner_panels:\n"
+                "        outliner = mc.outlinerPanel(panel, query=True, outlinerEditor=True)\n"
+                "        if outliner:\n"
+                "            mc.outlinerEditor(outliner, edit=True, showSelected=True)\n";
+            MGlobal::executePythonCommand(pythonCmd);
+        }
+    }
 }
 
 QStringList ExtraAttrUI::getEnumFieldNames(const QString& nodeName, const QString& attrName) const

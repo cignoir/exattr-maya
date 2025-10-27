@@ -138,6 +138,11 @@ private slots:
     void onSelectNode();
 
     /**
+     * @brief Select polygons assigned to material
+     */
+    void onSelectAssignedPolygons();
+
+    /**
      * @brief Handler when attribute filter is changed
      */
     void onAttributeFilterChanged(const QString& text);
@@ -150,7 +155,7 @@ private slots:
     /**
      * @brief Handler when node table selection is changed
      */
-    void onNodeSelectionChanged(const QModelIndex& current, const QModelIndex& previous);
+    void onNodeSelectionChanged(const QItemSelection& selected, const QItemSelection& deselected);
 
 private:
     /**
@@ -187,6 +192,16 @@ private:
      * @brief Select node in Maya
      */
     bool selectNodeInMaya(const QString& nodeName);
+
+    /**
+     * @brief Check if node is a shading node (material)
+     */
+    bool isShadingNode(const QString& nodeName);
+
+    /**
+     * @brief Select polygons assigned to material
+     */
+    bool selectPolygonsWithMaterial(const QString& materialName);
 
 private:
     // Singleton instance
