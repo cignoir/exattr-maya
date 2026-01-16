@@ -35,27 +35,28 @@ echo Maya Root: %MAYA_ROOT%
 echo Build Dir: %BUILD_DIR%
 echo.
 
-REM ===== Check for CMake =====
-where cmake >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] CMake not found in PATH.
-    echo Please install CMake 3.20 or later and add it to your PATH.
-    echo Download: https://cmake.org/download/
-    exit /b 1
-)
+REM Check moved after VS setup
 
 REM ===== Setup Visual Studio Environment =====
 echo [1/4] Setting up Visual Studio environment...
 
 REM Find Visual Studio 2022 environment variable setup script
-set VS2022_VCVARS="D:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
-if not exist %VS2022_VCVARS% (
-    set VS2022_VCVARS="D:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat"
-)
+set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat"
 if not exist %VS2022_VCVARS% (
     set VS2022_VCVARS="D:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
 )
-
+if not exist %VS2022_VCVARS% (
+    set VS2022_VCVARS="D:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
+)
+if not exist %VS2022_VCVARS% (
+    set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat"
+)
+if not exist %VS2022_VCVARS% (
+    set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
+)
+if not exist %VS2022_VCVARS% (
+    set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
+)
 if not exist %VS2022_VCVARS% (
     echo [ERROR] Visual Studio 2022 not found.
     echo Please install Visual Studio 2022 with C++ development tools.
@@ -71,6 +72,15 @@ if errorlevel 1 (
 
 echo [OK] Visual Studio environment configured.
 echo.
+
+REM ===== Check for CMake =====
+where cmake >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] CMake not found in PATH.
+    echo Please install CMake 3.20 or later and add it to your PATH.
+    echo Download: https://cmake.org/download/
+    exit /b 1
+)
 
 REM ===== Prepare Build Directory =====
 echo [2/4] Preparing build directory...
@@ -89,6 +99,34 @@ if errorlevel 1 (
 echo [OK] Build directory ready.
 echo.
 
+REM ===== Check for Qt Headers =====
+set MAYA_QT_INCLUDE_ARG=
+if not exist "%MAYA_ROOT%\include\QtWidgets" (
+    echo [INFO] Qt headers not found in default location. Checking for zip...
+    
+    set ZIP_PATH="%MAYA_ROOT%\include\qt_6.5.3_vc14-include.zip"
+    set LOCAL_QT_INC="%SCRIPT_DIR%qt_headers"
+    
+    if exist !ZIP_PATH! (
+        echo [INFO] Found Qt headers zip.
+        
+        REM Check if we need to extract
+        if not exist "!LOCAL_QT_INC!\QtWidgets" (
+            echo [INFO] Extracting Qt headers to !LOCAL_QT_INC!...
+            if not exist "!LOCAL_QT_INC!" mkdir "!LOCAL_QT_INC!"
+            tar -xf !ZIP_PATH! -C "!LOCAL_QT_INC!"
+        ) else (
+            echo [INFO] Qt headers already extracted in !LOCAL_QT_INC!.
+        )
+        
+        set MAYA_QT_INCLUDE_ARG=-DMAYA_QT_INCLUDE_DIR="!LOCAL_QT_INC!"
+        echo [INFO] Using local Qt headers.
+    ) else (
+        echo [WARNING] Qt headers not found and zip not found. Build may fail.
+    )
+)
+echo.
+
 REM ===== Generate Visual Studio Project with CMake =====
 echo [3/4] Generating Visual Studio solution with CMake...
 
@@ -97,6 +135,7 @@ cd "%BUILD_DIR%"
 cmake -G "Visual Studio 17 2022" -A x64 ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DMAYA_ROOT="%MAYA_ROOT%" ^
+    %MAYA_QT_INCLUDE_ARG% ^
     ..
 
 if errorlevel 1 (

@@ -50,14 +50,27 @@ endif()
 set(CMAKE_AUTOMOC_MOC_OPTIONS "-I${MAYA_ROOT}/include")
 
 # Include directories
-include_directories(
-    ${MAYA_INCLUDE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    "${MAYA_ROOT}/include"
-    "${MAYA_ROOT}/include/QtCore"
-    "${MAYA_ROOT}/include/QtWidgets"
-    "${MAYA_ROOT}/include/QtGui"
-)
+# Include directories
+if(DEFINED MAYA_QT_INCLUDE_DIR)
+    message(STATUS "Using custom Qt include dir: ${MAYA_QT_INCLUDE_DIR}")
+    include_directories(
+        ${MAYA_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        "${MAYA_QT_INCLUDE_DIR}"
+        "${MAYA_QT_INCLUDE_DIR}/QtCore"
+        "${MAYA_QT_INCLUDE_DIR}/QtWidgets"
+        "${MAYA_QT_INCLUDE_DIR}/QtGui"
+    )
+else()
+    include_directories(
+        ${MAYA_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        "${MAYA_ROOT}/include"
+        "${MAYA_ROOT}/include/QtCore"
+        "${MAYA_ROOT}/include/QtWidgets"
+        "${MAYA_ROOT}/include/QtGui"
+    )
+endif()
 
 # Source files
 set(SOURCES

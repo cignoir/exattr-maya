@@ -60,3 +60,4 @@ desktop.ini
 *.tmp
 *.temp
 *.bak
+qt_headers/

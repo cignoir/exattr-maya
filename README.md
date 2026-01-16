@@ -18,6 +18,15 @@ A convenient plugin for managing custom attributes in Autodesk Maya
 - Batch editing of nodes with custom attributes
 - Filter and sort functionality
 - Select polygons assigned to materials with custom attributes
+- **Extract Assigned Polygons**:
+    - Right-click on a material node in the list.
+    - Choose **Extract Assigned Polygons...** to separate geometry assigned to that material.
+    - **Options**:
+        - **New Object Name**: Name for the extracted mesh(es).
+        - **Keep Original Polygons**: If unchecked, original faces are deleted.
+        - **Assign Single Lambert Material**: Assigns a new default shader to extracted/remaining faces.
+        - **Combine Meshes**: Merges multiple extracted meshes into a single object (preserves UVs, deletes history).
+    - **Grouping**: Extracted objects are automatically placed in a new group (`[Name]_grp`) at the scene root.
 
 ## Specifications
 

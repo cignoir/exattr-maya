@@ -15,6 +15,10 @@
 #include <QRadioButton>
 #include <QButtonGroup>
 #include <QSortFilterProxyModel>
+#include <QDialog>
+#include <QCheckBox>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <memory>
 
 #include "ExtraAttrModel.h"
@@ -40,6 +44,33 @@ public:
 
 private:
     ExtraAttrUI* m_ui;
+};
+
+/**
+ * @class ExtractOptionsDialog
+ * @brief Dialog for configuring extraction options
+ */
+class ExtractOptionsDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    explicit ExtractOptionsDialog(QWidget* parent = nullptr);
+
+    QString getObjectName() const;
+    bool keepOriginal() const;
+    bool assignMaterial() const;
+    QString getMaterialName() const;
+    bool combineMeshes() const;
+
+private slots:
+    void onAssignMaterialChanged(int state);
+
+private:
+    QLineEdit* m_objNameEdit;
+    QCheckBox* m_keepOriginalCheck;
+    QCheckBox* m_assignMatCheck;
+    QLineEdit* m_matNameEdit;
+    QCheckBox* m_combineMeshesCheck;
 };
 
 /**
@@ -141,6 +172,11 @@ private slots:
      * @brief Select polygons assigned to material
      */
     void onSelectAssignedPolygons();
+
+    /**
+     * @brief Extract polygons assigned to material
+     */
+    void onExtractAssignedPolygons();
 
     /**
      * @brief Handler when attribute filter is changed

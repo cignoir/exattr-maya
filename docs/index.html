@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Extra Attribute Editor for Maya - Maya用カスタムアトリビュート管理プラグイン。シーン全体のカスタム属性を高速スキャン、一括編集。無料・オープンソース。">
-    <meta name="keywords" content="Maya extra attributes, Maya custom attributes, Maya plugin, Autodesk Maya, Maya 2025">
+    <meta name="description"
+        content="Extra Attribute Editor for Maya - Maya用カスタムアトリビュート管理プラグイン。シーン全体のカスタム属性を高速スキャン、一括編集。無料・オープンソース。">
+    <meta name="keywords"
+        content="Maya extra attributes, Maya custom attributes, Maya plugin, Autodesk Maya, Maya 2025">
     <meta name="author" content="cignoir">
     <title>Extra Attribute Editor for Maya</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -194,6 +197,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Extra Attribute Editor v1.0.1</h1>
@@ -201,17 +205,18 @@
 
         <div class="card">
             <div class="buttons">
-                <a href="https://github.com/cignoir/exattr-maya/releases/download/v1.0.1/exattr-maya.zip" class="btn">ダウンロード</a>
+                <a href="https://github.com/cignoir/exattr-maya/releases/download/v1.0.1/exattr-maya.zip"
+                    class="btn">ダウンロード</a>
                 <a href="https://github.com/cignoir/exattr-maya" class="btn btn-secondary">GitHub</a>
             </div>
 
             <img src="https://github.com/user-attachments/assets/45351b86-577b-45d6-abc0-229ceb06fcaf"
-                 alt="Extra Attribute Editor"
-                 class="screenshot">
+                alt="Extra Attribute Editor" class="screenshot">
 
             <h2>使い方</h2>
             <ul>
-                <li>ダウンロードした exattr-maya.mll をプラグインフォルダ <code>%USERPROFILE%\Documents\maya\2025\plug-ins\</code>など にコピー</li>
+                <li>ダウンロードした exattr-maya.mll をプラグインフォルダ <code>%USERPROFILE%\Documents\maya\2025\plug-ins\</code>など にコピー
+                </li>
                 <li>Maya の Plug-in Manager でプラグインをロード</li>
                 <li>メニューから <strong>Windows &gt; General Editors &gt; Extra Attribute Editor</strong> を選択</li>
                 <li>または MEL コマンド <code>exAttrEditor -ui;</code> で起動</li>
@@ -223,6 +228,20 @@
                 <li>カスタムアトリビュートが設定されたノードのバッチ編集</li>
                 <li>フィルター・ソート機能搭載</li>
                 <li>カスタムアトリビュートが設定されたマテリアルからアサインされたポリゴンをまとめて選択</li>
+                <li><strong>割り当てポリゴンの抽出 (Extract Assigned Polygons)</strong>:
+                    <ul style="margin-top: 0.5rem; font-size: 0.9em; color: #555;">
+                        <li>マテリアルリストで右クリック &gt; <strong>Extract Assigned Polygons...</strong> を選択</li>
+                        <li><strong>オプション機能</strong>:
+                            <ul>
+                                <li><strong>New Object Name</strong>: 抽出後のオブジェクト名を指定</li>
+                                <li><strong>Keep Original Polygons</strong>: 元の面を残すか削除するかを選択</li>
+                                <li><strong>Assign Single Lambert Material</strong>: 抽出後にデフォルトマテリアルを割り当て</li>
+                                <li><strong>Combine Meshes</strong>: 複数の抽出結果を1つのメッシュに結合（UV維持）</li>
+                            </ul>
+                        </li>
+                        <li>抽出されたオブジェクトは自動的に <code>[名前]_grp</code> にグループ化されます</li>
+                    </ul>
+                </li>
             </ul>
 
             <h2>技術仕様</h2>
@@ -251,4 +270,5 @@
         <a href="https://github.com/cignoir/exattr-maya/releases">Releases</a>
     </footer>
 </body>
+
 </html>

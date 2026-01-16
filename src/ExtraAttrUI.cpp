@@ -85,6 +85,75 @@ void EnumAttributeDelegate::updateEditorGeometry(QWidget* editor, const QStyleOp
     editor->setGeometry(option.rect);
 }
 
+// ========== ExtractOptionsDialog Implementation ==========
+
+ExtractOptionsDialog::ExtractOptionsDialog(QWidget* parent)
+    : QDialog(parent)
+{
+    setWindowTitle("Extract Assigned Polygons Options");
+    resize(400, 200);
+
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    QFormLayout* formLayout = new QFormLayout();
+
+    m_objNameEdit = new QLineEdit("extractedModel");
+    formLayout->addRow("New Object Name:", m_objNameEdit);
+
+    m_combineMeshesCheck = new QCheckBox();
+    m_combineMeshesCheck->setChecked(true);
+    formLayout->addRow("Combine Meshes:", m_combineMeshesCheck);
+
+    m_keepOriginalCheck = new QCheckBox();
+    m_keepOriginalCheck->setChecked(true);
+    formLayout->addRow("Keep Original Polygons:", m_keepOriginalCheck);
+
+    m_assignMatCheck = new QCheckBox();
+    m_assignMatCheck->setChecked(true);
+    formLayout->addRow("Assign Single Lambert Material:", m_assignMatCheck);
+
+    m_matNameEdit = new QLineEdit("extractedMaterial");
+    formLayout->addRow("New Material Name:", m_matNameEdit);
+
+    mainLayout->addLayout(formLayout);
+
+    QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    mainLayout->addWidget(buttonBox);
+
+    connect(m_assignMatCheck, &QCheckBox::stateChanged, this, &ExtractOptionsDialog::onAssignMaterialChanged);
+}
+
+QString ExtractOptionsDialog::getObjectName() const
+{
+    return m_objNameEdit->text();
+}
+
+bool ExtractOptionsDialog::keepOriginal() const
+{
+    return m_keepOriginalCheck->isChecked();
+}
+
+bool ExtractOptionsDialog::assignMaterial() const
+{
+    return m_assignMatCheck->isChecked();
+}
+
+QString ExtractOptionsDialog::getMaterialName() const
+{
+    return m_matNameEdit->text();
+}
+
+bool ExtractOptionsDialog::combineMeshes() const
+{
+    return m_combineMeshesCheck->isChecked();
+}
+
+void ExtractOptionsDialog::onAssignMaterialChanged(int state)
+{
+    m_matNameEdit->setEnabled(state == Qt::Checked);
+}
+
 // ========== ExtraAttrUI Implementation ==========
 
 // Singleton instance
@@ -464,8 +533,10 @@ void ExtraAttrUI::onNodeContextMenu(const QPoint& pos)
 
     // Add polygon selection option if node is a material
     QAction* selectPolygonsAction = nullptr;
+    QAction* extractPolygonsAction = nullptr;
     if (isShadingNode(nodeName)) {
         selectPolygonsAction = menu.addAction("Select Assigned Polygons");
+        extractPolygonsAction = menu.addAction("Extract Assigned Polygons...");
     }
 
     QAction* deleteAction = menu.addAction("Delete Attribute from This Node...");
@@ -478,6 +549,8 @@ void ExtraAttrUI::onNodeContextMenu(const QPoint& pos)
         onSelectNode();
     } else if (selectedAction == selectPolygonsAction && selectPolygonsAction) {
         onSelectAssignedPolygons();
+    } else if (selectedAction == extractPolygonsAction && extractPolygonsAction) {
+        onExtractAssignedPolygons();
     } else if (selectedAction == deleteAction) {
         onDeleteAttribute();
     } else if (selectedAction == batchAction) {
@@ -1035,6 +1108,195 @@ void ExtraAttrUI::onSelectAssignedPolygons()
         QMessageBox::warning(this, "Select Polygons",
                            QString("Failed to select polygons for selected materials."));
     }
+}
+
+void ExtraAttrUI::onExtractAssignedPolygons()
+{
+    QModelIndexList selectedRows = m_nodeTableView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty()) {
+        QMessageBox::information(this, "Extract Polygons", "Please select at least one material node.");
+        return;
+    }
+
+    // Collect all material names
+    QStringList materialNames;
+    for (const QModelIndex& index : selectedRows) {
+        QModelIndex sourceIndex = m_nodeProxyModel->mapToSource(index);
+        QString nodeName = m_nodeModel->getNodeName(sourceIndex.row());
+        if (isShadingNode(nodeName)) {
+            materialNames.append(nodeName);
+        }
+    }
+
+    if (materialNames.isEmpty()) {
+        QMessageBox::information(this, "Extract Polygons", "No material nodes selected.");
+        return;
+    }
+
+    // Show options dialog
+    ExtractOptionsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QString newObjName = dialog.getObjectName();
+    bool keepOriginal = dialog.keepOriginal();
+    bool assignMaterial = dialog.assignMaterial();
+    QString newMatName = dialog.getMaterialName();
+    bool combineMeshes = dialog.combineMeshes();
+
+    if (newObjName.isEmpty()) {
+        QMessageBox::warning(this, "Extract Polygons", "Please specify a new object name.");
+        return;
+    }
+
+    if (assignMaterial && newMatName.isEmpty()) {
+        QMessageBox::warning(this, "Extract Polygons", "Please specify a new material name.");
+        return;
+    }
+
+    // Build Python command
+    MString pythonCmd = "import maya.cmds as mc\n";
+    pythonCmd += "materials = [";
+    for (int i = 0; i < materialNames.size(); ++i) {
+        pythonCmd += "'" + MString(materialNames[i].toUtf8().constData()) + "'";
+        if (i < materialNames.size() - 1) {
+            pythonCmd += ", ";
+        }
+    }
+    pythonCmd += "]\n";
+    
+    // Pass options to Python
+    pythonCmd += "new_obj_name_base = '" + MString(newObjName.toUtf8().constData()) + "'\n";
+    pythonCmd += "keep_original = " + MString(keepOriginal ? "True" : "False") + "\n";
+    pythonCmd += "assign_material = " + MString(assignMaterial ? "True" : "False") + "\n";
+    pythonCmd += "new_mat_name = '" + MString(newMatName.toUtf8().constData()) + "'\n";
+    pythonCmd += "combine_meshes = " + MString(combineMeshes ? "True" : "False") + "\n";
+
+    pythonCmd += "try:\n";
+    pythonCmd += "    # 1. Identify target faces\n";
+    pythonCmd += "    all_faces = []\n";
+    pythonCmd += "    for material in materials:\n";
+    pythonCmd += "        shading_engines = []\n";
+    pythonCmd += "        if mc.objectType(material) == 'shadingEngine':\n";
+    pythonCmd += "            shading_engines = [material]\n";
+    pythonCmd += "        else:\n";
+    pythonCmd += "            connections = mc.listConnections(material, type='shadingEngine', destination=True) or []\n";
+    pythonCmd += "            shading_engines = list(set(connections))\n";
+    pythonCmd += "        \n";
+    pythonCmd += "        for sg in shading_engines:\n";
+    pythonCmd += "            members = mc.sets(sg, query=True) or []\n";
+    pythonCmd += "            for member in members:\n";
+    pythonCmd += "                if '.f[' in member:\n";
+    pythonCmd += "                    all_faces.append(member)\n";
+    pythonCmd += "                elif mc.objectType(member, isAType='mesh'):\n";
+    pythonCmd += "                    face_count = mc.polyEvaluate(member, face=True)\n";
+    pythonCmd += "                    if face_count > 0:\n";
+    pythonCmd += "                        all_faces.append(member + '.f[0:' + str(face_count-1) + ']')\n";
+    pythonCmd += "                elif mc.objectType(member, isAType='transform'):\n";
+    pythonCmd += "                    shapes = mc.listRelatives(member, shapes=True, type='mesh') or []\n";
+    pythonCmd += "                    for shape in shapes:\n";
+    pythonCmd += "                        face_count = mc.polyEvaluate(shape, face=True)\n";
+    pythonCmd += "                        if face_count > 0:\n";
+    pythonCmd += "                            all_faces.append(shape + '.f[0:' + str(face_count-1) + ']')\n";
+    pythonCmd += "    \n";
+    pythonCmd += "    if not all_faces:\n";
+    pythonCmd += "        print('No polygons found for selected materials')\n";
+    pythonCmd += "    else:\n";
+    pythonCmd += "        # 2. Group faces by object\n";
+    pythonCmd += "        objects_to_process = {}\n";
+    pythonCmd += "        # Need to handle flattened list for easier processing, enforce long names to prevent mismatches\n";
+    pythonCmd += "        all_faces_flat = mc.ls(all_faces, flatten=True, long=True)\n";
+    pythonCmd += "        for face in all_faces_flat:\n";
+    pythonCmd += "            # Safer way to extract object name\n";
+    pythonCmd += "            obj = face.split('.f[')[0]\n";
+    pythonCmd += "            if obj not in objects_to_process:\n";
+    pythonCmd += "                objects_to_process[obj] = []\n";
+    pythonCmd += "            objects_to_process[obj].append(face)\n";
+    pythonCmd += "        \n";
+    pythonCmd += "        new_objects = []\n";
+    pythonCmd += "        \n";
+    pythonCmd += "        mc.undoInfo(openChunk=True)\n";
+    pythonCmd += "        try:\n";
+    pythonCmd += "            for obj, obj_faces in objects_to_process.items():\n";
+    pythonCmd += "                # 3. Duplicate object\n";
+    pythonCmd += "                new_obj = mc.duplicate(obj, name=new_obj_name_base)[0]\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # Ensure we have the long name of the new object to match the source faces format\n";
+    pythonCmd += "                # IMPORTANT: mc.ls(..., long=True) on faces returns paths including the SHAPE node (e.g. |Transform|Shape.f[0])\n";
+    pythonCmd += "                # However, duplicate() returns the Transform name. We must get the Shape node's long path.\n";
+    pythonCmd += "                new_obj_long = mc.ls(new_obj, long=True)[0]\n";
+    pythonCmd += "                shapes = mc.listRelatives(new_obj_long, shapes=True, fullPath=True)\n";
+    pythonCmd += "                if shapes:\n";
+    pythonCmd += "                    target_obj_path = shapes[0]\n";
+    pythonCmd += "                else:\n";
+    pythonCmd += "                    target_obj_path = new_obj_long # Fallback if no shape (shouldn't happen for mesh)\n";
+    pythonCmd += "\n";
+    pythonCmd += "                # 4. Delete non-target faces on new object\n";
+    pythonCmd += "                # Get all faces of new object (long names) using the SHAPE path to ensure format matches\n";
+    pythonCmd += "                all_new_faces = mc.ls(target_obj_path + '.f[*]', flatten=True, long=True)\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # Map target faces to new object by index (robust against name changes)\n";
+    pythonCmd += "                # Parse index from source face string \"object.f[123]\" -> \"123\"\n";
+    pythonCmd += "                target_faces_new = []\n";
+    pythonCmd += "                for f in obj_faces:\n";
+    pythonCmd += "                    if '.f[' in f:\n";
+    pythonCmd += "                        face_idx = f.split('.f[')[-1].rstrip(']')\n";
+    pythonCmd += "                        target_faces_new.append(target_obj_path + '.f[' + face_idx + ']')\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # Calculate faces to delete (All - Target)\n";
+    pythonCmd += "                # Set operations with strings (perfect match required, hence long names)\n";
+    pythonCmd += "                to_delete = list(set(all_new_faces) - set(target_faces_new))\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                \n";
+    pythonCmd += "                if to_delete:\n";
+    pythonCmd += "                    mc.delete(to_delete)\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                new_objects.append(new_obj)\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # 5. Determine if original faces should be deleted\n";
+    pythonCmd += "                if not keep_original:\n";
+    pythonCmd += "                    mc.delete(obj_faces)\n";
+    pythonCmd += "            \n";
+    pythonCmd += "            if new_objects:\n";
+    pythonCmd += "                final_objects = new_objects\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # Combine meshes if requested\n";
+    pythonCmd += "                if combine_meshes and len(new_objects) > 0:\n";
+    pythonCmd += "                    if len(new_objects) > 1:\n";
+    pythonCmd += "                        # Use polyUnite to combine\n";
+    pythonCmd += "                        combined = mc.polyUnite(new_objects, name=new_obj_name_base + '_combined', ch=False, mergeUVSets=1)\n";
+    pythonCmd += "                        if combined:\n";
+    pythonCmd += "                            final_objects = [combined[0]]\n";
+    pythonCmd += "                    else:\n";
+    pythonCmd += "                        pass\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # 6. Assign material\n";
+    pythonCmd += "                if assign_material:\n";
+    pythonCmd += "                    mat = mc.shadingNode('lambert', asShader=True, name=new_mat_name)\n";
+    pythonCmd += "                    sg = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name=mat+'SG')\n";
+    pythonCmd += "                    mc.connectAttr(mat+'.outColor', sg+'.surfaceShader')\n";
+    pythonCmd += "                    mc.sets(final_objects, edit=True, forceElement=sg)\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                # 7. Group and reparent to top level\n";
+    pythonCmd += "                group_name = new_obj_name_base + '_grp'\n";
+    pythonCmd += "                group_node = mc.group(empty=True, name=group_name)\n";
+    pythonCmd += "                mc.parent(final_objects, group_node)\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                mc.select(final_objects, replace=True)\n";
+    pythonCmd += "                print('Extracted ' + str(len(new_objects)) + ' object(s) into group: ' + group_name)\n";
+    pythonCmd += "            \n";
+    pythonCmd += "        except Exception as inner_e:\n";
+    pythonCmd += "            print('Error during extraction loop: ' + str(inner_e))\n";
+    pythonCmd += "            raise inner_e\n";
+    pythonCmd += "        finally:\n";
+    pythonCmd += "            mc.undoInfo(closeChunk=True)\n";
+    pythonCmd += "            \n";
+    pythonCmd += "except Exception as e:\n";
+    pythonCmd += "    print('Error extracting polygons: ' + str(e))\n";
+    pythonCmd += "    mc.undoInfo(closeChunk=True)\n";
+
+    MGlobal::executePythonCommand(pythonCmd);
 }
 
 void ExtraAttrUI::onAttributeFilterChanged(const QString& text)
