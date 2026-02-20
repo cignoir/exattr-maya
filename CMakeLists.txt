@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ExtraAttrManager VERSION 1.0.0 LANGUAGES CXX)
+project(ExtraAttrManager VERSION 1.0.3 LANGUAGES CXX)
 
 # Set default path for Maya 2025 (can be overridden by environment variable)
 if(NOT DEFINED MAYA_ROOT)
