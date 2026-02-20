@@ -1,9 +1,10 @@
 #ifndef EXTRA_ATTR_MODEL_H
 #define EXTRA_ATTR_MODEL_H
 
-#include <QAbstractItemModel>
-#include <QList>
-#include <QString>
+#include <QtCore/QAbstractItemModel>
+#include <QtCore/QAbstractTableModel>
+#include <QtCore/QList>
+#include <QtCore/QString>
 #include <memory>
 #include <maya/MString.h>
 #include "ExtraAttrScanner.h"

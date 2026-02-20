@@ -149,9 +149,56 @@ bool ExtractOptionsDialog::combineMeshes() const
     return m_combineMeshesCheck->isChecked();
 }
 
+
+
 void ExtractOptionsDialog::onAssignMaterialChanged(int state)
 {
     m_matNameEdit->setEnabled(state == Qt::Checked);
+}
+
+// ========== GroupExtractOptionsDialog Implementation ==========
+
+GroupExtractOptionsDialog::GroupExtractOptionsDialog(QWidget* parent)
+    : QDialog(parent)
+{
+    setWindowTitle("Group and Extract Options");
+    resize(400, 150);
+
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    QFormLayout* formLayout = new QFormLayout();
+
+    m_objNameEdit = new QLineEdit("groupedMesh");
+    formLayout->addRow("Base Object Name:", m_objNameEdit);
+
+    m_combineMeshesCheck = new QCheckBox();
+    m_combineMeshesCheck->setChecked(true);
+    formLayout->addRow("Combine Meshes per Group:", m_combineMeshesCheck);
+
+    m_keepOriginalCheck = new QCheckBox();
+    m_keepOriginalCheck->setChecked(true);
+    formLayout->addRow("Keep Original Meshes:", m_keepOriginalCheck);
+
+    mainLayout->addLayout(formLayout);
+
+    QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    mainLayout->addWidget(buttonBox);
+}
+
+QString GroupExtractOptionsDialog::getObjectName() const
+{
+    return m_objNameEdit->text();
+}
+
+bool GroupExtractOptionsDialog::keepOriginal() const
+{
+    return m_keepOriginalCheck->isChecked();
+}
+
+bool GroupExtractOptionsDialog::combineMeshes() const
+{
+    return m_combineMeshesCheck->isChecked();
 }
 
 // ========== ExtraAttrUI Implementation ==========
@@ -240,7 +287,7 @@ void ExtraAttrUI::setupUI()
 
     m_attributeTableView->setModel(m_attributeProxyModel);
     m_attributeTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_attributeTableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_attributeTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_attributeTableView->setSortingEnabled(true);
     m_attributeTableView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_attributeTableView->horizontalHeader()->setStretchLastSection(true);
@@ -507,6 +554,13 @@ void ExtraAttrUI::onAttributeContextMenu(const QPoint& pos)
     QMenu menu(this);
     QAction* addAction = menu.addAction("Add Attribute to Selected Nodes...");
     QAction* deleteAction = menu.addAction("Delete Attribute from All Nodes...");
+    
+    QAction* extractAction = nullptr;
+    QModelIndexList selectedRows = m_attributeTableView->selectionModel()->selectedRows();
+    if (selectedRows.size() > 0) {
+        menu.addSeparator();
+        extractAction = menu.addAction("Group and Extract by Selected Attributes...");
+    }
 
     QAction* selectedAction = menu.exec(m_attributeTableView->viewport()->mapToGlobal(pos));
 
@@ -514,6 +568,8 @@ void ExtraAttrUI::onAttributeContextMenu(const QPoint& pos)
         onAddAttribute();
     } else if (selectedAction == deleteAction) {
         onDeleteAttribute();
+    } else if (extractAction && selectedAction == extractAction) {
+        onExtractByAttributes();
     }
 }
 
@@ -1294,6 +1350,231 @@ void ExtraAttrUI::onExtractAssignedPolygons()
     pythonCmd += "            \n";
     pythonCmd += "except Exception as e:\n";
     pythonCmd += "    print('Error extracting polygons: ' + str(e))\n";
+    pythonCmd += "    mc.undoInfo(closeChunk=True)\n";
+
+    MGlobal::executePythonCommand(pythonCmd);
+}
+
+void ExtraAttrUI::onExtractByAttributes()
+{
+    QModelIndexList selectedRows = m_attributeTableView->selectionModel()->selectedRows();
+    if (selectedRows.isEmpty()) {
+        QMessageBox::information(this, "Extract by Attributes", "Please select at least one attribute.");
+        return;
+    }
+
+    // Collect all selected attribute names
+    QStringList targetAttrs;
+    for (const QModelIndex& index : selectedRows) {
+        QModelIndex sourceIndex = m_attributeProxyModel->mapToSource(index);
+        QString attrName = m_attributeModel->getAttributeName(sourceIndex.row());
+        if (!attrName.isEmpty()) {
+            targetAttrs.append(attrName);
+        }
+    }
+
+    if (targetAttrs.isEmpty()) {
+        return;
+    }
+
+    // Show options dialog
+    GroupExtractOptionsDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QString baseName = dialog.getObjectName();
+    bool keepOriginal = dialog.keepOriginal();
+    bool combineMeshes = dialog.combineMeshes();
+
+    if (baseName.isEmpty()) {
+        QMessageBox::warning(this, "Extract by Attributes", "Please specify a Base Object Name.");
+        return;
+    }
+
+    // Build Python command
+    MString pythonCmd = "import maya.cmds as mc\n";
+    pythonCmd += "import re\n";
+    pythonCmd += "target_attrs = [";
+    for (int i = 0; i < targetAttrs.size(); ++i) {
+        pythonCmd += "'" + MString(targetAttrs[i].toUtf8().constData()) + "'";
+        if (i < targetAttrs.size() - 1) {
+            pythonCmd += ", ";
+        }
+    }
+    pythonCmd += "]\n";
+    
+    pythonCmd += "base_name = '" + MString(baseName.toUtf8().constData()) + "'\n";
+    pythonCmd += "keep_original = " + MString(keepOriginal ? "True" : "False") + "\n";
+    pythonCmd += "combine_meshes = " + MString(combineMeshes ? "True" : "False") + "\n";
+
+    pythonCmd += "try:\n";
+    pythonCmd += "    print('--- Extract by Attributes Debug ---')\n";
+    pythonCmd += "    print('Target Attributes:', target_attrs)\n";
+    pythonCmd += "    # 1. Get all nodes that have the first attribute\n";
+    pythonCmd += "    # Use objectsOnly to avoid getting plug names\n";
+    pythonCmd += "    first_attr = target_attrs[0]\n";
+    pythonCmd += "    nodes = mc.ls('*.' + first_attr, objectsOnly=True, long=True) or []\n";
+    pythonCmd += "    print('Found {} nodes with first attr: {}'.format(len(nodes), first_attr))\n";
+    pythonCmd += "    \n";
+    pythonCmd += "    # 2. Filter nodes that have ALL target attributes\n";
+    pythonCmd += "    valid_nodes_raw = []\n";
+    pythonCmd += "    for n in set(nodes):\n";
+    pythonCmd += "        has_all = True\n";
+    pythonCmd += "        for attr in target_attrs:\n";
+    pythonCmd += "            if not mc.attributeQuery(attr, node=n, exists=True) and not mc.objExists(n + '.' + attr):\n";
+    pythonCmd += "                has_all = False\n";
+    pythonCmd += "                break\n";
+    pythonCmd += "        if has_all:\n";
+    pythonCmd += "            valid_nodes_raw.append(n)\n";
+    pythonCmd += "    \n";
+    pythonCmd += "    print('Found {} nodes containing ALL target attributes'.format(len(valid_nodes_raw)))\n";
+    pythonCmd += "    if not valid_nodes_raw:\n";
+    pythonCmd += "        mc.warning('No nodes found with all selected attributes.')\n";
+    pythonCmd += "    else:\n";
+    pythonCmd += "        # Group nodes by combined attribute values\n";
+    pythonCmd += "        groups = {}\n";
+    pythonCmd += "        for n in valid_nodes_raw:\n";
+    pythonCmd += "            vals = []\n";
+    pythonCmd += "            valid = True\n";
+    pythonCmd += "            for attr in target_attrs:\n";
+    pythonCmd += "                try:\n";
+    pythonCmd += "                    try: v = mc.getAttr(n + '.' + attr, asString=True)\n";
+    pythonCmd += "                    except: v = mc.getAttr(n + '.' + attr)\n";
+    pythonCmd += "                    vals.append(str(v))\n";
+    pythonCmd += "                except:\n";
+    pythonCmd += "                    valid = False\n";
+    pythonCmd += "                    break\n";
+    pythonCmd += "            if valid:\n";
+    pythonCmd += "                key = '_'.join(vals)\n";
+    pythonCmd += "                key = re.sub(r'[^a-zA-Z0-9]', '_', key)\n";
+    pythonCmd += "                if key not in groups:\n";
+    pythonCmd += "                    groups[key] = []\n";
+    pythonCmd += "                groups[key].append(n)\n";
+    pythonCmd += "        \n";
+    pythonCmd += "        if not groups:\n";
+    pythonCmd += "            mc.warning('No valid grouped mesh nodes found.')\n";
+    pythonCmd += "        else:\n";
+    pythonCmd += "            print('Created {} groups: {}'.format(len(groups), list(groups.keys())))\n";
+    pythonCmd += "            mc.undoInfo(openChunk=True)\n";
+    pythonCmd += "            try:\n";
+    pythonCmd += "                top_grp = mc.group(empty=True, name=base_name + '_attributes_ext_grp')\n";
+    pythonCmd += "                for key, nodes in groups.items():\n";
+    pythonCmd += "                    new_grp_name = base_name + '_' + key\n";
+    pythonCmd += "                    print('Processing group: {}'.format(new_grp_name))\n";
+    pythonCmd += "                    \n";
+    pythonCmd += "                    group_objects = []\n";
+    pythonCmd += "                    group_faces = []\n";
+    pythonCmd += "                    for n in nodes:\n";
+    pythonCmd += "                        try: obj_type = mc.objectType(n)\n";
+    pythonCmd += "                        except: continue\n";
+    pythonCmd += "                        if mc.objectType(n, isAType='transform'):\n";
+    pythonCmd += "                            shapes = mc.listRelatives(n, shapes=True, type='mesh')\n";
+    pythonCmd += "                            if shapes: group_objects.append(n)\n";
+    pythonCmd += "                        elif mc.objectType(n, isAType='mesh'):\n";
+    pythonCmd += "                            p = mc.listRelatives(n, parent=True, fullPath=True)\n";
+    pythonCmd += "                            if p: group_objects.append(p[0])\n";
+    pythonCmd += "                        else:\n";
+    pythonCmd += "                            shading_engines = []\n";
+    pythonCmd += "                            if obj_type == 'shadingEngine':\n";
+    pythonCmd += "                                shading_engines = [n]\n";
+    pythonCmd += "                            else:\n";
+    pythonCmd += "                                conns = mc.listConnections(n, type='shadingEngine', destination=True) or []\n";
+    pythonCmd += "                                shading_engines = list(set(conns))\n";
+    pythonCmd += "                            for sg in shading_engines:\n";
+    pythonCmd += "                                members = mc.sets(sg, query=True) or []\n";
+    pythonCmd += "                                for member in members:\n";
+    pythonCmd += "                                    if '.f[' in member:\n";
+    pythonCmd += "                                        group_faces.append(member)\n";
+    pythonCmd += "                                    elif mc.objectType(member, isAType='mesh'):\n";
+    pythonCmd += "                                        fc = mc.polyEvaluate(member, face=True)\n";
+    pythonCmd += "                                        if fc > 0:\n";
+    pythonCmd += "                                            group_faces.append(member + '.f[0:' + str(fc-1) + ']')\n";
+    pythonCmd += "                                    elif mc.objectType(member, isAType='transform'):\n";
+    pythonCmd += "                                        shapes = mc.listRelatives(member, shapes=True, type='mesh') or []\n";
+    pythonCmd += "                                        for shape in shapes:\n";
+    pythonCmd += "                                            fc = mc.polyEvaluate(shape, face=True)\n";
+    pythonCmd += "                                            if fc > 0:\n";
+    pythonCmd += "                                                group_faces.append(shape + '.f[0:' + str(fc-1) + ']')\n";
+    pythonCmd += "                    \n";
+    pythonCmd += "                    extracted_items = []\n";
+    pythonCmd += "                    if group_objects:\n";
+    pythonCmd += "                        group_objects = list(set(group_objects))\n";
+    pythonCmd += "                        dups = mc.duplicate(group_objects, returnRootsOnly=True)\n";
+    pythonCmd += "                        extracted_items.extend(dups)\n";
+    pythonCmd += "                        if not keep_original: mc.delete(group_objects)\n";
+    pythonCmd += "                    \n";
+    pythonCmd += "                    if group_faces:\n";
+    pythonCmd += "                        objects_to_process = {}\n";
+    pythonCmd += "                        faces_flat = mc.ls(group_faces, flatten=True, long=True)\n";
+    pythonCmd += "                        for f in faces_flat:\n";
+    pythonCmd += "                            obj = f.split('.f[')[0]\n";
+    pythonCmd += "                            if obj not in objects_to_process: objects_to_process[obj] = []\n";
+    pythonCmd += "                            objects_to_process[obj].append(f)\n";
+    pythonCmd += "                        for obj, obj_faces in objects_to_process.items():\n";
+    pythonCmd += "                            try:\n";
+    pythonCmd += "                                new_obj = mc.duplicate(obj, name=new_grp_name + '_ext')[0]\n";
+    pythonCmd += "                                new_obj_long = mc.ls(new_obj, long=True)[0]\n";
+    pythonCmd += "                                shapes = mc.listRelatives(new_obj_long, shapes=True, fullPath=True)\n";
+    pythonCmd += "                                tgt_shape = shapes[0] if shapes else new_obj_long\n";
+    pythonCmd += "                                all_new_f = mc.ls(tgt_shape + '.f[*]', flatten=True, long=True)\n";
+    pythonCmd += "                                keep_f = []\n";
+    pythonCmd += "                                for src_f in obj_faces:\n";
+    pythonCmd += "                                    if '.f[' in src_f:\n";
+    pythonCmd += "                                        idx = src_f.split('.f[')[-1].rstrip(']')\n";
+    pythonCmd += "                                        keep_f.append(tgt_shape + '.f[' + idx + ']')\n";
+    pythonCmd += "                                to_del = list(set(all_new_f) - set(keep_f))\n";
+    pythonCmd += "                                if to_del: mc.delete(to_del)\n";
+    pythonCmd += "                                extracted_items.append(new_obj)\n";
+    pythonCmd += "                                if not keep_original: mc.delete(obj_faces)\n";
+    pythonCmd += "                            except Exception as e:\n";
+    pythonCmd += "                                print('Error duplicating faces for ' + str(obj) + ': ' + str(e))\n";
+    pythonCmd += "                    \n";
+    pythonCmd += "                    if extracted_items:\n";
+    pythonCmd += "                        final_items = []\n";
+    pythonCmd += "                        if combine_meshes and len(extracted_items) > 1:\n";
+    pythonCmd += "                            combined = mc.polyUnite(extracted_items, name=new_grp_name, ch=False, mergeUVSets=1)\n";
+    pythonCmd += "                            if combined:\n";
+    pythonCmd += "                                mc.parent(combined[0], top_grp)\n";
+    pythonCmd += "                                final_items.append(combined[0])\n";
+    pythonCmd += "                        else:\n";
+    pythonCmd += "                            mc.parent(extracted_items, top_grp)\n";
+    pythonCmd += "                            if len(extracted_items) == 1:\n";
+    pythonCmd += "                                try:\n";
+    pythonCmd += "                                    new_name = mc.rename(extracted_items[0], new_grp_name)\n";
+    pythonCmd += "                                    final_items.append(new_name)\n";
+    pythonCmd += "                                except:\n";
+    pythonCmd += "                                    final_items.append(extracted_items[0])\n";
+    pythonCmd += "                            else:\n";
+    pythonCmd += "                                for i, d in enumerate(extracted_items):\n";
+    pythonCmd += "                                    try:\n";
+    pythonCmd += "                                        new_name = mc.rename(d, new_grp_name + '_' + str(i+1))\n";
+    pythonCmd += "                                        final_items.append(new_name)\n";
+    pythonCmd += "                                    except:\n";
+    pythonCmd += "                                        final_items.append(d)\n";
+    pythonCmd += "                        \n";
+    pythonCmd += "                        for item in final_items:\n";
+    pythonCmd += "                            # Get the short name of the transform node to use for material naming\n";
+    pythonCmd += "                            item_short = item.split('|')[-1]\n";
+    pythonCmd += "                            mat_name = 'mat_' + item_short\n";
+    pythonCmd += "                            \n";
+    pythonCmd += "                            # Create Lambert material and shading group\n";
+    pythonCmd += "                            mat = mc.shadingNode('lambert', asShader=True, name=mat_name)\n";
+    pythonCmd += "                            sg = mc.sets(renderable=True, noSurfaceShader=True, empty=True, name=mat+'SG')\n";
+    pythonCmd += "                            mc.connectAttr(mat+'.outColor', sg+'.surfaceShader')\n";
+    pythonCmd += "                            \n";
+    pythonCmd += "                            # Assign material to the object\n";
+    pythonCmd += "                            mc.sets(item, edit=True, forceElement=sg)\n";
+    pythonCmd += "                \n";
+    pythonCmd += "                mc.select(top_grp)\n";
+    pythonCmd += "                print('Extracted nodes into ' + str(len(groups)) + ' groups.')\n";
+    pythonCmd += "            except Exception as e:\n";
+    pythonCmd += "                print('Error during attributes extraction loop: ' + str(e))\n";
+    pythonCmd += "                raise e\n";
+    pythonCmd += "            finally:\n";
+    pythonCmd += "                mc.undoInfo(closeChunk=True)\n";
+    pythonCmd += "except Exception as e:\n";
+    pythonCmd += "    print('Error extracting polygons by attributes: ' + str(e))\n";
     pythonCmd += "    mc.undoInfo(closeChunk=True)\n";
 
     MGlobal::executePythonCommand(pythonCmd);

@@ -1,24 +1,24 @@
 #ifndef EXTRA_ATTR_UI_H
 #define EXTRA_ATTR_UI_H
 
-#include <QMainWindow>
-#include <QTableView>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QLabel>
-#include <QSplitter>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QMenu>
-#include <QStyledItemDelegate>
-#include <QComboBox>
-#include <QRadioButton>
-#include <QButtonGroup>
-#include <QSortFilterProxyModel>
-#include <QDialog>
-#include <QCheckBox>
-#include <QDialogButtonBox>
-#include <QFormLayout>
+#include <QtWidgets/QMainWindow>
+#include <QtWidgets/QTableView>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QPushButton>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QSplitter>
+#include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QMenu>
+#include <QtWidgets/QStyledItemDelegate>
+#include <QtWidgets/QComboBox>
+#include <QtWidgets/QRadioButton>
+#include <QtWidgets/QButtonGroup>
+#include <QtCore/QSortFilterProxyModel>
+#include <QtWidgets/QDialog>
+#include <QtWidgets/QCheckBox>
+#include <QtWidgets/QDialogButtonBox>
+#include <QtWidgets/QFormLayout>
 #include <memory>
 
 #include "ExtraAttrModel.h"
@@ -70,6 +70,26 @@ private:
     QCheckBox* m_keepOriginalCheck;
     QCheckBox* m_assignMatCheck;
     QLineEdit* m_matNameEdit;
+    QCheckBox* m_combineMeshesCheck;
+};
+
+/**
+ * @class GroupExtractOptionsDialog
+ * @brief Dialog for configuring group extraction options
+ */
+class GroupExtractOptionsDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    explicit GroupExtractOptionsDialog(QWidget* parent = nullptr);
+
+    QString getObjectName() const;
+    bool keepOriginal() const;
+    bool combineMeshes() const;
+
+private:
+    QLineEdit* m_objNameEdit;
+    QCheckBox* m_keepOriginalCheck;
     QCheckBox* m_combineMeshesCheck;
 };
 
@@ -177,6 +197,11 @@ private slots:
      * @brief Extract polygons assigned to material
      */
     void onExtractAssignedPolygons();
+
+    /**
+     * @brief Extract nodes or polygons grouped by selected attributes
+     */
+    void onExtractByAttributes();
 
     /**
      * @brief Handler when attribute filter is changed
