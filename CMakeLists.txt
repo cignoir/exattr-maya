@@ -45,13 +45,14 @@ set(MAYA_INCLUDE_DIR "${MAYA_ROOT}/include")
 set(MAYA_LIB_DIR "${MAYA_ROOT}/lib")
 
 # ============================================================
-# C++ standard (Maya 2022+ requires C++17)
+# Minimum version check (Qt6 / Maya 2022+)
 # ============================================================
 if(MAYA_VERSION_NUM LESS 2022)
-    set(CMAKE_CXX_STANDARD 14)
-else()
-    set(CMAKE_CXX_STANDARD 17)
+    message(FATAL_ERROR "Maya ${MAYA_VERSION_NUM} is not supported. Minimum required version is Maya 2022.")
 endif()
+
+# C++ standard
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ============================================================
@@ -85,15 +86,9 @@ else()
 endif()
 
 # ============================================================
-# Qt version detection (Maya 2020-2021: Qt5, Maya 2022+: Qt6)
+# Qt6 configuration
 # ============================================================
-if(MAYA_VERSION_NUM LESS 2022)
-    set(EXATTR_QT_MAJOR 5)
-    message(STATUS "Using Qt5 (Maya ${MAYA_VERSION_NUM})")
-else()
-    set(EXATTR_QT_MAJOR 6)
-    message(STATUS "Using Qt6 (Maya ${MAYA_VERSION_NUM})")
-endif()
+message(STATUS "Using Qt6 (Maya ${MAYA_VERSION_NUM})")
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -182,89 +177,52 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
     PREFIX ""
     SUFFIX "${_plugin_suffix}"
-    OUTPUT_NAME "exattr-maya-qt${EXATTR_QT_MAJOR}"
+    OUTPUT_NAME "exattr-maya"
     AUTOMOC ON
 )
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC_MOC_OPTIONS ${CMAKE_AUTOMOC_MOC_OPTIONS})
 
-# Pass Qt major version to source code
-target_compile_definitions(${PROJECT_NAME} PRIVATE EXATTR_QT_MAJOR=${EXATTR_QT_MAJOR})
-
 # ============================================================
-# Link libraries (Qt5 vs Qt6)
+# Link libraries (Qt6 only)
 # ============================================================
 if(WIN32)
-    set(_maya_libs
+    target_link_libraries(${PROJECT_NAME}
         ${MAYA_LIB_DIR}/Foundation.lib
         ${MAYA_LIB_DIR}/OpenMaya.lib
         ${MAYA_LIB_DIR}/OpenMayaUI.lib
+        ${MAYA_LIB_DIR}/Qt6Core.lib
+        ${MAYA_LIB_DIR}/Qt6Widgets.lib
+        ${MAYA_LIB_DIR}/Qt6Gui.lib
     )
-    if(EXATTR_QT_MAJOR EQUAL 5)
-        list(APPEND _maya_libs
-            ${MAYA_LIB_DIR}/Qt5Core.lib
-            ${MAYA_LIB_DIR}/Qt5Widgets.lib
-            ${MAYA_LIB_DIR}/Qt5Gui.lib
-        )
-    else()
-        list(APPEND _maya_libs
-            ${MAYA_LIB_DIR}/Qt6Core.lib
-            ${MAYA_LIB_DIR}/Qt6Widgets.lib
-            ${MAYA_LIB_DIR}/Qt6Gui.lib
-        )
-    endif()
-    target_link_libraries(${PROJECT_NAME} ${_maya_libs})
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME}
         ${MAYA_LIB_DIR}/libFoundation.dylib
         ${MAYA_LIB_DIR}/libOpenMaya.dylib
         ${MAYA_LIB_DIR}/libOpenMayaUI.dylib
+        ${MAYA_LIB_DIR}/libQt6Core.dylib
+        ${MAYA_LIB_DIR}/libQt6Widgets.dylib
+        ${MAYA_LIB_DIR}/libQt6Gui.dylib
     )
-    if(EXATTR_QT_MAJOR EQUAL 5)
-        target_link_libraries(${PROJECT_NAME}
-            ${MAYA_LIB_DIR}/libQt5Core.dylib
-            ${MAYA_LIB_DIR}/libQt5Widgets.dylib
-            ${MAYA_LIB_DIR}/libQt5Gui.dylib
-        )
-    else()
-        target_link_libraries(${PROJECT_NAME}
-            ${MAYA_LIB_DIR}/libQt6Core.dylib
-            ${MAYA_LIB_DIR}/libQt6Widgets.dylib
-            ${MAYA_LIB_DIR}/libQt6Gui.dylib
-        )
-    endif()
 else()
     # Linux
     target_link_libraries(${PROJECT_NAME}
         ${MAYA_LIB_DIR}/libFoundation.so
         ${MAYA_LIB_DIR}/libOpenMaya.so
         ${MAYA_LIB_DIR}/libOpenMayaUI.so
+        ${MAYA_LIB_DIR}/libQt6Core.so
+        ${MAYA_LIB_DIR}/libQt6Widgets.so
+        ${MAYA_LIB_DIR}/libQt6Gui.so
     )
-    if(EXATTR_QT_MAJOR EQUAL 5)
-        target_link_libraries(${PROJECT_NAME}
-            ${MAYA_LIB_DIR}/libQt5Core.so
-            ${MAYA_LIB_DIR}/libQt5Widgets.so
-            ${MAYA_LIB_DIR}/libQt5Gui.so
-        )
-    else()
-        target_link_libraries(${PROJECT_NAME}
-            ${MAYA_LIB_DIR}/libQt6Core.so
-            ${MAYA_LIB_DIR}/libQt6Widgets.so
-            ${MAYA_LIB_DIR}/libQt6Gui.so
-        )
-    endif()
 endif()
 
 # ============================================================
 # Compiler options
 # ============================================================
 if(MSVC)
-    set(_compile_opts /W3 /MD /EHsc /Zi /O2 /utf-8)
-    # Qt6 requires stricter conformance
-    if(EXATTR_QT_MAJOR EQUAL 6)
-        list(APPEND _compile_opts /Zc:__cplusplus /permissive-)
-    endif()
-    target_compile_options(${PROJECT_NAME} PRIVATE ${_compile_opts})
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        /W3 /MD /EHsc /Zi /O2 /utf-8 /Zc:__cplusplus /permissive-
+    )
 
     target_link_options(${PROJECT_NAME} PRIVATE
         /EXPORT:initializePlugin
@@ -291,5 +249,4 @@ install(TARGETS ${PROJECT_NAME}
 message(STATUS "Maya Root: ${MAYA_ROOT}")
 message(STATUS "Maya Include: ${MAYA_INCLUDE_DIR}")
 message(STATUS "Maya Lib: ${MAYA_LIB_DIR}")
-message(STATUS "Qt Major Version: ${EXATTR_QT_MAJOR}")
 message(STATUS "Plugin Extension: ${_plugin_suffix}")

@@ -1,7 +1,6 @@
 #ifndef EXTRA_ATTR_UI_H
 #define EXTRA_ATTR_UI_H
 
-#include <QtCore/QtGlobal>
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QTableView>
 #include <QtWidgets/QLineEdit>

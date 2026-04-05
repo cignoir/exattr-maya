@@ -9,7 +9,7 @@ setlocal enabledelayedexpansion
 REM ===== Configuration =====
 set SCRIPT_DIR=%~dp0
 set BUILD_DIR=%SCRIPT_DIR%build
-set PLUGIN_BASE_NAME=exattr-maya
+set PLUGIN_NAME=exattr-maya.mll
 
 REM Get Maya path from command line argument, or auto-detect
 if "%~1"=="" (
@@ -43,17 +43,6 @@ if not defined MAYA_VER (
 )
 
 echo [INFO] Maya version detected: %MAYA_VER%
-
-REM Determine Qt version from Maya version (Maya 2022+ = Qt6, earlier = Qt5)
-set QT_MAJOR=6
-if defined MAYA_VER (
-    if !MAYA_VER! LSS 2022 (
-        set QT_MAJOR=5
-    )
-)
-set PLUGIN_NAME=%PLUGIN_BASE_NAME%-qt!QT_MAJOR!.mll
-echo [INFO] Qt version: Qt!QT_MAJOR!
-echo [INFO] Plugin name: !PLUGIN_NAME!
 
 REM Validate Maya path
 if not exist "%MAYA_ROOT%" (
