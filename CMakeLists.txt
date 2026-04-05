@@ -5,44 +5,74 @@ project(ExtraAttrManager VERSION 1.0.4 LANGUAGES CXX)
 # Maya version detection and configuration
 # ============================================================
 
-# Allow user to specify MAYA_ROOT or MAYA_VERSION
-if(NOT DEFINED MAYA_ROOT)
-    if(DEFINED MAYA_VERSION)
-        set(MAYA_ROOT "C:/Program Files/Autodesk/Maya${MAYA_VERSION}" CACHE PATH "Maya installation directory")
+# Support two modes:
+#   1. MAYA_DEVKIT_ROOT - build from downloaded devkit (devkitBase directory)
+#   2. MAYA_ROOT        - build from full Maya installation
+if(DEFINED MAYA_DEVKIT_ROOT)
+    # Devkit mode: devkitBase/include, devkitBase/lib, devkitBase/Qt/...
+    set(MAYA_INCLUDE_DIR "${MAYA_DEVKIT_ROOT}/include")
+    set(MAYA_LIB_DIR "${MAYA_DEVKIT_ROOT}/lib")
+
+    # Qt from devkit lives under Qt/ subdirectory
+    if(EXISTS "${MAYA_DEVKIT_ROOT}/Qt/lib")
+        set(MAYA_QT_DIR "${MAYA_DEVKIT_ROOT}/Qt")
     else()
-        # Auto-detect: find the latest Maya installation (match Maya + 4-digit year only)
-        file(GLOB _maya_all "C:/Program Files/Autodesk/Maya*")
-        set(_maya_candidates "")
-        foreach(_dir ${_maya_all})
-            if(_dir MATCHES "Maya[0-9][0-9][0-9][0-9]$")
-                list(APPEND _maya_candidates "${_dir}")
-            endif()
-        endforeach()
-        if(_maya_candidates)
-            list(SORT _maya_candidates ORDER DESCENDING)
-            list(GET _maya_candidates 0 _maya_latest)
-            set(MAYA_ROOT "${_maya_latest}" CACHE PATH "Maya installation directory (auto-detected)")
-            message(STATUS "Auto-detected Maya: ${MAYA_ROOT}")
+        set(MAYA_QT_DIR "${MAYA_DEVKIT_ROOT}")
+    endif()
+
+    # Detect version from devkit path or MAYA_VERSION variable
+    if(DEFINED MAYA_VERSION)
+        set(MAYA_VERSION_NUM ${MAYA_VERSION})
+    else()
+        string(REGEX MATCH "[Mm]aya([0-9]+)" _maya_match "${MAYA_DEVKIT_ROOT}")
+        if(_maya_match)
+            set(MAYA_VERSION_NUM ${CMAKE_MATCH_1})
         else()
-            set(MAYA_ROOT "C:/Program Files/Autodesk/Maya2025" CACHE PATH "Maya installation directory")
+            set(MAYA_VERSION_NUM 2025)
+            message(WARNING "Could not detect Maya version, assuming 2025")
         endif()
+    endif()
+
+    message(STATUS "Using devkit: ${MAYA_DEVKIT_ROOT}")
+else()
+    # Full installation mode
+    if(NOT DEFINED MAYA_ROOT)
+        if(DEFINED MAYA_VERSION)
+            set(MAYA_ROOT "C:/Program Files/Autodesk/Maya${MAYA_VERSION}" CACHE PATH "Maya installation directory")
+        else()
+            # Auto-detect: find the latest Maya installation (match Maya + 4-digit year only)
+            file(GLOB _maya_all "C:/Program Files/Autodesk/Maya*")
+            set(_maya_candidates "")
+            foreach(_dir ${_maya_all})
+                if(_dir MATCHES "Maya[0-9][0-9][0-9][0-9]$")
+                    list(APPEND _maya_candidates "${_dir}")
+                endif()
+            endforeach()
+            if(_maya_candidates)
+                list(SORT _maya_candidates ORDER DESCENDING)
+                list(GET _maya_candidates 0 _maya_latest)
+                set(MAYA_ROOT "${_maya_latest}" CACHE PATH "Maya installation directory (auto-detected)")
+                message(STATUS "Auto-detected Maya: ${MAYA_ROOT}")
+            else()
+                set(MAYA_ROOT "C:/Program Files/Autodesk/Maya2025" CACHE PATH "Maya installation directory")
+            endif()
+        endif()
+    endif()
+
+    set(MAYA_INCLUDE_DIR "${MAYA_ROOT}/include")
+    set(MAYA_LIB_DIR "${MAYA_ROOT}/lib")
+    set(MAYA_QT_DIR "${MAYA_ROOT}")
+
+    string(REGEX MATCH "Maya([0-9]+)" _maya_match "${MAYA_ROOT}")
+    if(_maya_match)
+        set(MAYA_VERSION_NUM ${CMAKE_MATCH_1})
+    else()
+        set(MAYA_VERSION_NUM 2025)
+        message(WARNING "Could not detect Maya version from path, assuming 2025")
     endif()
 endif()
 
-# Extract Maya version number from MAYA_ROOT path
-string(REGEX MATCH "Maya([0-9]+)" _maya_match "${MAYA_ROOT}")
-if(_maya_match)
-    set(MAYA_VERSION_NUM ${CMAKE_MATCH_1})
-else()
-    set(MAYA_VERSION_NUM 2025)
-    message(WARNING "Could not detect Maya version from path, assuming 2025")
-endif()
-
 message(STATUS "Maya Version: ${MAYA_VERSION_NUM}")
-
-# Maya SDK paths
-set(MAYA_INCLUDE_DIR "${MAYA_ROOT}/include")
-set(MAYA_LIB_DIR "${MAYA_ROOT}/lib")
 
 # ============================================================
 # Minimum version check (Qt6 / Maya 2022+)
@@ -95,12 +125,12 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC OFF)
 
 # Qt library directory
-set(QT_LIBRARY_DIR "${MAYA_ROOT}/lib")
+set(QT_LIBRARY_DIR "${MAYA_QT_DIR}/lib")
 
 # Set path for moc tool
 find_program(Qt_MOC_EXECUTABLE
     NAMES moc moc.exe
-    PATHS "${MAYA_ROOT}/bin"
+    PATHS "${MAYA_QT_DIR}/bin" "${MAYA_ROOT}/bin"
     NO_DEFAULT_PATH
 )
 
@@ -108,34 +138,32 @@ if(Qt_MOC_EXECUTABLE)
     set(CMAKE_AUTOMOC_EXECUTABLE ${Qt_MOC_EXECUTABLE})
     message(STATUS "Found moc: ${Qt_MOC_EXECUTABLE}")
 else()
-    message(WARNING "Qt moc not found in Maya bin directory, relying on system moc")
+    message(WARNING "Qt moc not found, relying on system moc")
 endif()
 
-set(CMAKE_AUTOMOC_MOC_OPTIONS "-I${MAYA_ROOT}/include")
+set(CMAKE_AUTOMOC_MOC_OPTIONS "-I${MAYA_INCLUDE_DIR}")
 
 # ============================================================
 # Include directories
 # ============================================================
+# Determine Qt include directory
 if(DEFINED MAYA_QT_INCLUDE_DIR)
-    message(STATUS "Using custom Qt include dir: ${MAYA_QT_INCLUDE_DIR}")
-    include_directories(
-        ${MAYA_INCLUDE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        "${MAYA_QT_INCLUDE_DIR}"
-        "${MAYA_QT_INCLUDE_DIR}/QtCore"
-        "${MAYA_QT_INCLUDE_DIR}/QtWidgets"
-        "${MAYA_QT_INCLUDE_DIR}/QtGui"
-    )
+    set(_qt_inc "${MAYA_QT_INCLUDE_DIR}")
+    message(STATUS "Using custom Qt include dir: ${_qt_inc}")
+elseif(EXISTS "${MAYA_QT_DIR}/include/QtWidgets")
+    set(_qt_inc "${MAYA_QT_DIR}/include")
 else()
-    include_directories(
-        ${MAYA_INCLUDE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        "${MAYA_ROOT}/include"
-        "${MAYA_ROOT}/include/QtCore"
-        "${MAYA_ROOT}/include/QtWidgets"
-        "${MAYA_ROOT}/include/QtGui"
-    )
+    set(_qt_inc "${MAYA_INCLUDE_DIR}")
 endif()
+
+include_directories(
+    ${MAYA_INCLUDE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    "${_qt_inc}"
+    "${_qt_inc}/QtCore"
+    "${_qt_inc}/QtWidgets"
+    "${_qt_inc}/QtGui"
+)
 
 # ============================================================
 # Source and header files
@@ -186,23 +214,25 @@ set_property(TARGET ${PROJECT_NAME} PROPERTY AUTOMOC_MOC_OPTIONS ${CMAKE_AUTOMOC
 # ============================================================
 # Link libraries (Qt6 only)
 # ============================================================
+set(_qt_lib_dir "${MAYA_QT_DIR}/lib")
+
 if(WIN32)
     target_link_libraries(${PROJECT_NAME}
         ${MAYA_LIB_DIR}/Foundation.lib
         ${MAYA_LIB_DIR}/OpenMaya.lib
         ${MAYA_LIB_DIR}/OpenMayaUI.lib
-        ${MAYA_LIB_DIR}/Qt6Core.lib
-        ${MAYA_LIB_DIR}/Qt6Widgets.lib
-        ${MAYA_LIB_DIR}/Qt6Gui.lib
+        ${_qt_lib_dir}/Qt6Core.lib
+        ${_qt_lib_dir}/Qt6Widgets.lib
+        ${_qt_lib_dir}/Qt6Gui.lib
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME}
         ${MAYA_LIB_DIR}/libFoundation.dylib
         ${MAYA_LIB_DIR}/libOpenMaya.dylib
         ${MAYA_LIB_DIR}/libOpenMayaUI.dylib
-        ${MAYA_LIB_DIR}/libQt6Core.dylib
-        ${MAYA_LIB_DIR}/libQt6Widgets.dylib
-        ${MAYA_LIB_DIR}/libQt6Gui.dylib
+        ${_qt_lib_dir}/libQt6Core.dylib
+        ${_qt_lib_dir}/libQt6Widgets.dylib
+        ${_qt_lib_dir}/libQt6Gui.dylib
     )
 else()
     # Linux
@@ -210,9 +240,9 @@ else()
         ${MAYA_LIB_DIR}/libFoundation.so
         ${MAYA_LIB_DIR}/libOpenMaya.so
         ${MAYA_LIB_DIR}/libOpenMayaUI.so
-        ${MAYA_LIB_DIR}/libQt6Core.so
-        ${MAYA_LIB_DIR}/libQt6Widgets.so
-        ${MAYA_LIB_DIR}/libQt6Gui.so
+        ${_qt_lib_dir}/libQt6Core.so
+        ${_qt_lib_dir}/libQt6Widgets.so
+        ${_qt_lib_dir}/libQt6Gui.so
     )
 endif()
 
@@ -246,7 +276,12 @@ install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION plug-ins
 )
 
-message(STATUS "Maya Root: ${MAYA_ROOT}")
+if(DEFINED MAYA_DEVKIT_ROOT)
+    message(STATUS "Maya Devkit: ${MAYA_DEVKIT_ROOT}")
+else()
+    message(STATUS "Maya Root: ${MAYA_ROOT}")
+endif()
 message(STATUS "Maya Include: ${MAYA_INCLUDE_DIR}")
 message(STATUS "Maya Lib: ${MAYA_LIB_DIR}")
+message(STATUS "Qt Dir: ${MAYA_QT_DIR}")
 message(STATUS "Plugin Extension: ${_plugin_suffix}")

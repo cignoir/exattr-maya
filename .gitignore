@@ -61,3 +61,6 @@ desktop.ini
 *.temp
 *.bak
 qt_headers/
+devkits/
+dist/
+build_*/
