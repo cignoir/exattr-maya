@@ -1,6 +1,7 @@
 #ifndef EXTRA_ATTR_MODEL_H
 #define EXTRA_ATTR_MODEL_H
 
+#include <QtCore/QtGlobal>
 #include <QtCore/QAbstractItemModel>
 #include <QtCore/QAbstractTableModel>
 #include <QtCore/QList>

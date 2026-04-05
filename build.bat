@@ -1,30 +1,65 @@
 @echo off
-REM Extra Attribute Manager - Build Script for Maya 2025 Plugin
-REM Usage: build.bat [Maya2025_Install_Path]
+REM Extra Attribute Manager - Build Script for Maya Plugin
+REM Usage: build.bat [Maya_Install_Path]
 REM Example: build.bat "C:\Program Files\Autodesk\Maya2025"
+REM          build.bat                (auto-detects latest Maya)
 
 setlocal enabledelayedexpansion
 
 REM ===== Configuration =====
 set SCRIPT_DIR=%~dp0
 set BUILD_DIR=%SCRIPT_DIR%build
-set PLUGIN_NAME=exattr-maya.mll
+set PLUGIN_BASE_NAME=exattr-maya
 
-REM Default installation path for Maya 2025
-set DEFAULT_MAYA_ROOT=C:\Program Files\Autodesk\Maya2025
-
-REM Get Maya path from command line argument, or use default
+REM Get Maya path from command line argument, or auto-detect
 if "%~1"=="" (
-    set MAYA_ROOT=%DEFAULT_MAYA_ROOT%
+    echo [INFO] No Maya path specified, auto-detecting...
+    set MAYA_ROOT=
+    for /f "delims=" %%d in ('dir /b /ad /o-n "C:\Program Files\Autodesk\Maya*" 2^>nul') do (
+        if not defined MAYA_ROOT (
+            set MAYA_ROOT=C:\Program Files\Autodesk\%%d
+        )
+    )
+    if not defined MAYA_ROOT (
+        echo [ERROR] No Maya installation found in C:\Program Files\Autodesk\
+        echo Please specify the Maya installation path as argument.
+        echo Usage: build.bat [Maya_Install_Path]
+        exit /b 1
+    )
+    echo [INFO] Auto-detected: !MAYA_ROOT!
 ) else (
     set MAYA_ROOT=%~1
 )
 
+REM Extract Maya version number from path
+set MAYA_VER=
+for /f "tokens=2 delims=Maya" %%v in ("!MAYA_ROOT!") do (
+    set MAYA_VER=%%v
+)
+REM Fallback: extract last 4 digits
+if not defined MAYA_VER (
+    set MAYA_VER_STR=!MAYA_ROOT!
+    set MAYA_VER=!MAYA_VER_STR:~-4!
+)
+
+echo [INFO] Maya version detected: %MAYA_VER%
+
+REM Determine Qt version from Maya version (Maya 2022+ = Qt6, earlier = Qt5)
+set QT_MAJOR=6
+if defined MAYA_VER (
+    if !MAYA_VER! LSS 2022 (
+        set QT_MAJOR=5
+    )
+)
+set PLUGIN_NAME=%PLUGIN_BASE_NAME%-qt!QT_MAJOR!.mll
+echo [INFO] Qt version: Qt!QT_MAJOR!
+echo [INFO] Plugin name: !PLUGIN_NAME!
+
 REM Validate Maya path
 if not exist "%MAYA_ROOT%" (
     echo [ERROR] Maya installation not found at: %MAYA_ROOT%
-    echo Please specify the correct Maya 2025 installation path.
-    echo Usage: build.bat [Maya2025_Install_Path]
+    echo Please specify the correct Maya installation path.
+    echo Usage: build.bat [Maya_Install_Path]
     exit /b 1
 )
 
@@ -32,39 +67,37 @@ echo ============================================
 echo Extra Attribute Manager - Build Script
 echo ============================================
 echo Maya Root: %MAYA_ROOT%
+echo Maya Version: %MAYA_VER%
 echo Build Dir: %BUILD_DIR%
 echo.
-
-REM Check moved after VS setup
 
 REM ===== Setup Visual Studio Environment =====
 echo [1/4] Setting up Visual Studio environment...
 
-REM Find Visual Studio 2022 environment variable setup script
-set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat"
-if not exist %VS2022_VCVARS% (
-    set VS2022_VCVARS="D:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
+REM Find Visual Studio environment variable setup script (2022 and 2019)
+set VCVARS_FOUND=0
+
+for %%e in (Professional Enterprise Community) do (
+    for %%y in (2022 2019) do (
+        for %%d in ("C:\Program Files\Microsoft Visual Studio\%%y\%%e\VC\Auxiliary\Build\vcvarsall.bat" "D:\Program Files\Microsoft Visual Studio\%%y\%%e\VC\Auxiliary\Build\vcvarsall.bat") do (
+            if exist %%d (
+                if !VCVARS_FOUND!==0 (
+                    set VCVARS_BAT=%%d
+                    set VCVARS_FOUND=1
+                )
+            )
+        )
+    )
 )
-if not exist %VS2022_VCVARS% (
-    set VS2022_VCVARS="D:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
-)
-if not exist %VS2022_VCVARS% (
-    set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvarsall.bat"
-)
-if not exist %VS2022_VCVARS% (
-    set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"
-)
-if not exist %VS2022_VCVARS% (
-    set VS2022_VCVARS="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"
-)
-if not exist %VS2022_VCVARS% (
-    echo [ERROR] Visual Studio 2022 not found.
-    echo Please install Visual Studio 2022 with C++ development tools.
+
+if %VCVARS_FOUND%==0 (
+    echo [ERROR] Visual Studio 2019 or 2022 not found.
+    echo Please install Visual Studio with C++ development tools.
     exit /b 1
 )
 
-REM Setup MSVC environment
-call %VS2022_VCVARS% x64
+echo [INFO] Using: %VCVARS_BAT%
+call %VCVARS_BAT% x64
 if errorlevel 1 (
     echo [ERROR] Failed to setup Visual Studio environment.
     exit /b 1
@@ -103,22 +136,34 @@ REM ===== Check for Qt Headers =====
 set MAYA_QT_INCLUDE_ARG=
 if not exist "%MAYA_ROOT%\include\QtWidgets" (
     echo [INFO] Qt headers not found in default location. Checking for zip...
-    
-    set ZIP_PATH="%MAYA_ROOT%\include\qt_6.5.3_vc14-include.zip"
+
+    REM Try both Qt5 and Qt6 zip patterns
+    set ZIP_FOUND=0
+    for %%f in ("%MAYA_ROOT%\include\qt_*.zip") do (
+        if !ZIP_FOUND!==0 (
+            set ZIP_PATH=%%f
+            set ZIP_FOUND=1
+        )
+    )
+
     set LOCAL_QT_INC="%SCRIPT_DIR%qt_headers"
-    
-    if exist !ZIP_PATH! (
-        echo [INFO] Found Qt headers zip.
-        
+
+    if !ZIP_FOUND!==1 (
+        echo [INFO] Found Qt headers zip: !ZIP_PATH!
+
         REM Check if we need to extract
         if not exist "!LOCAL_QT_INC!\QtWidgets" (
             echo [INFO] Extracting Qt headers to !LOCAL_QT_INC!...
             if not exist "!LOCAL_QT_INC!" mkdir "!LOCAL_QT_INC!"
-            tar -xf !ZIP_PATH! -C "!LOCAL_QT_INC!"
+            REM Try tar first, fall back to Python for zip files
+            tar -xf !ZIP_PATH! -C "!LOCAL_QT_INC!" 2>nul
+            if not exist "!LOCAL_QT_INC!\QtWidgets" (
+                python -c "import zipfile; zipfile.ZipFile(r'!ZIP_PATH!').extractall(r'!LOCAL_QT_INC!')" 2>nul
+            )
         ) else (
             echo [INFO] Qt headers already extracted in !LOCAL_QT_INC!.
         )
-        
+
         set MAYA_QT_INCLUDE_ARG=-DMAYA_QT_INCLUDE_DIR="!LOCAL_QT_INC!"
         echo [INFO] Using local Qt headers.
     ) else (
@@ -127,12 +172,20 @@ if not exist "%MAYA_ROOT%\include\QtWidgets" (
 )
 echo.
 
+REM ===== Determine CMake Generator =====
+set CMAKE_GEN="Visual Studio 17 2022"
+REM Check if VS2022 cl.exe is available, otherwise try 2019
+where cl >nul 2>&1
+if errorlevel 1 (
+    set CMAKE_GEN="Visual Studio 16 2019"
+)
+
 REM ===== Generate Visual Studio Project with CMake =====
 echo [3/4] Generating Visual Studio solution with CMake...
 
 cd "%BUILD_DIR%"
 
-cmake -G "Visual Studio 17 2022" -A x64 ^
+cmake -G %CMAKE_GEN% -A x64 ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DMAYA_ROOT="%MAYA_ROOT%" ^
     %MAYA_QT_INCLUDE_ARG% ^
@@ -174,15 +227,15 @@ if exist "%BUILD_DIR%\%PLUGIN_NAME%" (
     echo Plugin: %BUILD_DIR%\%PLUGIN_NAME%
     echo.
     echo Copying MEL scripts...
-    set MAYA_SCRIPTS_DIR=%USERPROFILE%\Documents\maya\2025\scripts
-    if not exist "%MAYA_SCRIPTS_DIR%" (
-        mkdir "%MAYA_SCRIPTS_DIR%"
+    set MAYA_SCRIPTS_DIR=%USERPROFILE%\Documents\maya\%MAYA_VER%\scripts
+    if not exist "!MAYA_SCRIPTS_DIR!" (
+        mkdir "!MAYA_SCRIPTS_DIR!"
     )
-    copy "%SCRIPT_DIR%scripts\addExtraAttrMenu.mel" "%MAYA_SCRIPTS_DIR%\" >nul
+    copy "%SCRIPT_DIR%scripts\addExtraAttrMenu.mel" "!MAYA_SCRIPTS_DIR!\" >nul
     if errorlevel 1 (
         echo [WARNING] Failed to copy MEL scripts
     ) else (
-        echo MEL scripts copied to: %MAYA_SCRIPTS_DIR%
+        echo MEL scripts copied to: !MAYA_SCRIPTS_DIR!
     )
     echo.
 
