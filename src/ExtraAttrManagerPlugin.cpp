@@ -13,7 +13,7 @@
 MStatus initializePlugin(MObject obj)
 {
     MStatus status;
-    MFnPlugin plugin(obj, "Extra Attribute Manager", "1.0.3", "Any");
+    MFnPlugin plugin(obj, "Extra Attribute Manager", "1.0.4", "Any");
 
     // Register MEL command
     status = plugin.registerCommand(

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ExtraAttrManager VERSION 1.0.3 LANGUAGES CXX)
+project(ExtraAttrManager VERSION 1.0.4 LANGUAGES CXX)
 
 # ============================================================
 # Maya version detection and configuration
