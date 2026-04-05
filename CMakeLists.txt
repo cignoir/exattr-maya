@@ -205,7 +205,7 @@ endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
     PREFIX ""
     SUFFIX "${_plugin_suffix}"
-    OUTPUT_NAME "exattr-maya"
+    OUTPUT_NAME "exattr-maya-${MAYA_VERSION_NUM}"
     AUTOMOC ON
 )
 

@@ -9,7 +9,7 @@ setlocal enabledelayedexpansion
 REM ===== Configuration =====
 set SCRIPT_DIR=%~dp0
 set BUILD_DIR=%SCRIPT_DIR%build
-set PLUGIN_NAME=exattr-maya.mll
+REM PLUGIN_NAME is set after Maya version detection below
 
 REM Get Maya path from command line argument, or auto-detect
 if "%~1"=="" (
@@ -43,6 +43,8 @@ if not defined MAYA_VER (
 )
 
 echo [INFO] Maya version detected: %MAYA_VER%
+
+set PLUGIN_NAME=exattr-maya-!MAYA_VER!.mll
 
 REM Validate Maya path
 if not exist "%MAYA_ROOT%" (

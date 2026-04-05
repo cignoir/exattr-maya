@@ -1,7 +1,7 @@
 @echo off
 REM Build plugin for all available Maya devkits
 REM Usage: build_all.bat [devkits_dir]
-REM Output: dist\Maya<version>\exattr-maya.mll
+REM Output: dist\exattr-maya-<version>.mll
 
 setlocal enabledelayedexpansion
 
@@ -14,7 +14,6 @@ if "%~1"=="" (
 )
 
 set DIST_DIR=%SCRIPT_DIR%dist
-set PLUGIN_NAME=exattr-maya.mll
 
 echo ============================================
 echo Extra Attribute Manager - Multi-Version Build
@@ -88,6 +87,8 @@ for %%v in (2022 2023 2024 2025 2026 2027) do (
             set /a FAIL_COUNT+=1
             cd "%SCRIPT_DIR%"
         ) else (
+            set PLUGIN_FILE=exattr-maya-%%v.mll
+
             REM Build
             cmake --build . --config Release >nul 2>&1
             if errorlevel 1 (
@@ -97,13 +98,13 @@ for %%v in (2022 2023 2024 2025 2026 2027) do (
                 set /a FAIL_COUNT+=1
             ) else (
                 REM Copy to dist
-                if not exist "%DIST_DIR%\Maya%%v" mkdir "%DIST_DIR%\Maya%%v"
-                copy "Release\%PLUGIN_NAME%" "%DIST_DIR%\Maya%%v\%PLUGIN_NAME%" >nul 2>&1
-                if not exist "%DIST_DIR%\Maya%%v\%PLUGIN_NAME%" (
-                    copy "%PLUGIN_NAME%" "%DIST_DIR%\Maya%%v\%PLUGIN_NAME%" >nul 2>&1
+                if not exist "%DIST_DIR%" mkdir "%DIST_DIR%"
+                copy "Release\!PLUGIN_FILE!" "%DIST_DIR%\!PLUGIN_FILE!" >nul 2>&1
+                if not exist "%DIST_DIR%\!PLUGIN_FILE!" (
+                    copy "!PLUGIN_FILE!" "%DIST_DIR%\!PLUGIN_FILE!" >nul 2>&1
                 )
 
-                if exist "%DIST_DIR%\Maya%%v\%PLUGIN_NAME%" (
+                if exist "%DIST_DIR%\!PLUGIN_FILE!" (
                     echo [OK] Maya %%v - Built successfully
                     set /a BUILD_COUNT+=1
                 ) else (
@@ -122,11 +123,7 @@ for %%v in (2022 2023 2024 2025 2026 2027) do (
 
 REM Copy MEL scripts to dist
 if %BUILD_COUNT% GTR 0 (
-    for %%v in (2022 2023 2024 2025 2026 2027) do (
-        if exist "%DIST_DIR%\Maya%%v\%PLUGIN_NAME%" (
-            copy "%SCRIPT_DIR%scripts\*.mel" "%DIST_DIR%\Maya%%v\" >nul 2>&1
-        )
-    )
+    copy "%SCRIPT_DIR%scripts\*.mel" "%DIST_DIR%\" >nul 2>&1
 )
 
 echo ============================================
@@ -137,8 +134,8 @@ echo Failed:  %FAIL_COUNT%
 echo.
 echo Output:
 for %%v in (2022 2023 2024 2025 2026 2027) do (
-    if exist "%DIST_DIR%\Maya%%v\%PLUGIN_NAME%" (
-        echo   [OK] %DIST_DIR%\Maya%%v\%PLUGIN_NAME%
+    if exist "%DIST_DIR%\exattr-maya-%%v.mll" (
+        echo   [OK] dist\exattr-maya-%%v.mll
     )
 )
 
