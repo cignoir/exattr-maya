@@ -15,7 +15,7 @@ REM Get Maya path from command line argument, or auto-detect
 if "%~1"=="" (
     echo [INFO] No Maya path specified, auto-detecting...
     set MAYA_ROOT=
-    for /f "delims=" %%d in ('dir /b /ad /o-n "C:\Program Files\Autodesk\Maya*" 2^>nul') do (
+    for /f "delims=" %%d in ('dir /b /ad /o-n "C:\Program Files\Autodesk" 2^>nul ^| findstr /r "^Maya[0-9][0-9][0-9][0-9]$"') do (
         if not defined MAYA_ROOT (
             set MAYA_ROOT=C:\Program Files\Autodesk\%%d
         )
