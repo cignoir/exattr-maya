@@ -382,8 +382,8 @@ void ExtraAttrUI::setupUI()
 
     connect(m_attributeFilterLineEdit, &QLineEdit::textChanged, this, &ExtraAttrUI::onAttributeFilterChanged);
     connect(m_nodeFilterLineEdit, &QLineEdit::textChanged, this, &ExtraAttrUI::onNodeFilterChanged);
-    connect(m_filterButtonGroup, &QButtonGroup::buttonClicked,
-            [this]() { onNodeFilterChanged(m_nodeFilterLineEdit->text()); });
+    connect(m_filterButtonGroup, qOverload<QAbstractButton*>(&QButtonGroup::buttonClicked),
+            this, [this](QAbstractButton*) { onNodeFilterChanged(m_nodeFilterLineEdit->text()); });
 
     connect(m_attributeTableView->selectionModel(), &QItemSelectionModel::currentChanged,
             this, &ExtraAttrUI::onAttributeSelectionChanged);

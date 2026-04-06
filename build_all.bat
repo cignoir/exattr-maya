@@ -6,14 +6,16 @@ REM Output: dist\exattr-maya-<version>.mll
 setlocal enabledelayedexpansion
 
 set SCRIPT_DIR=%~dp0
+REM Remove trailing backslash to avoid "path\" quoting issues with CMake
+if "%SCRIPT_DIR:~-1%"=="\" set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 
 if "%~1"=="" (
-    set DEVKIT_DIR=%SCRIPT_DIR%devkits
+    set DEVKIT_DIR=%SCRIPT_DIR%\devkits
 ) else (
     set DEVKIT_DIR=%~1
 )
 
-set DIST_DIR=%SCRIPT_DIR%dist
+set DIST_DIR=%SCRIPT_DIR%\dist
 
 echo ============================================
 echo Extra Attribute Manager - Multi-Version Build
@@ -61,7 +63,7 @@ REM ===== Build for each available devkit =====
 set BUILD_COUNT=0
 set FAIL_COUNT=0
 
-for %%v in (2022 2023 2024 2025 2026 2027) do (
+for %%v in (2025 2026 2027) do (
     set DEVKIT_BASE=%DEVKIT_DIR%\Maya%%v\devkitBase
 
     if exist "!DEVKIT_BASE!\include\maya" (
@@ -69,7 +71,7 @@ for %%v in (2022 2023 2024 2025 2026 2027) do (
         echo Building for Maya %%v...
         echo ==================================================
 
-        set BUILD_DIR=%SCRIPT_DIR%build_%%v
+        set BUILD_DIR=%SCRIPT_DIR%\build_%%v
 
         REM Clean build directory
         if exist "!BUILD_DIR!" rmdir /s /q "!BUILD_DIR!"
@@ -123,7 +125,7 @@ for %%v in (2022 2023 2024 2025 2026 2027) do (
 
 REM Copy MEL scripts to dist
 if %BUILD_COUNT% GTR 0 (
-    copy "%SCRIPT_DIR%scripts\*.mel" "%DIST_DIR%\" >nul 2>&1
+    copy "%SCRIPT_DIR%\scripts\*.mel" "%DIST_DIR%\" >nul 2>&1
 )
 
 echo ============================================
@@ -133,7 +135,7 @@ echo Success: %BUILD_COUNT%
 echo Failed:  %FAIL_COUNT%
 echo.
 echo Output:
-for %%v in (2022 2023 2024 2025 2026 2027) do (
+for %%v in (2025 2026 2027) do (
     if exist "%DIST_DIR%\exattr-maya-%%v.mll" (
         echo   [OK] dist\exattr-maya-%%v.mll
     )
