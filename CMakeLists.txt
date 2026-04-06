@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ExtraAttrManager VERSION 1.0.4 LANGUAGES CXX)
+project(ExtraAttrManager VERSION 1.0.5 LANGUAGES CXX)
 
 # ============================================================
 # Maya version detection and configuration
@@ -77,8 +77,8 @@ message(STATUS "Maya Version: ${MAYA_VERSION_NUM}")
 # ============================================================
 # Minimum version check (Qt6 / Maya 2022+)
 # ============================================================
-if(MAYA_VERSION_NUM LESS 2022)
-    message(FATAL_ERROR "Maya ${MAYA_VERSION_NUM} is not supported. Minimum required version is Maya 2022.")
+if(MAYA_VERSION_NUM LESS 2025)
+    message(FATAL_ERROR "Maya ${MAYA_VERSION_NUM} is not supported. Minimum required version is Maya 2025.")
 endif()
 
 # C++ standard
