@@ -13,9 +13,5 @@
     "procedure": "addExtraAttrMenu"
   },
   "icon": "@auto",
-  "home_origin": {
-    "type": "embedded",
-    "catalogue_name": "cigmaya"
-  },
   "tags": ["plugin", "attribute", "editor"]
 }
