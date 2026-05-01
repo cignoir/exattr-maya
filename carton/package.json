@@ -1,0 +1,21 @@
+{
+  "namespace": "cignoir",
+  "name": "exattr-maya",
+  "display_name": "Extra Attribute Editor",
+  "version": "1.0.0",
+  "type": "maya_module",
+  "description": "A convenient plugin for managing custom attributes in Autodesk Maya",
+  "author": "cignoir",
+  "maya_versions": ["2025", "2026", "2027"],
+  "entry_point": {
+    "type": "mel",
+    "script": "addExtraAttrMenu.mel",
+    "procedure": "addExtraAttrMenu"
+  },
+  "icon": "@auto",
+  "home_origin": {
+    "type": "embedded",
+    "catalogue_name": "cigmaya"
+  },
+  "tags": ["plugin", "attribute", "editor"]
+}

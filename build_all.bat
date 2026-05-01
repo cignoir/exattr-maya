@@ -141,5 +141,70 @@ for %%v in (2025 2026 2027) do (
     )
 )
 
+REM ===== Carton package staging + zip =====
+REM Skip if no .mll built or carton-maya not installed.
+if %BUILD_COUNT% EQU 0 goto :skip_carton
+
+python -c "import carton" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo [INFO] carton-maya not installed - skipping zip packaging.
+    echo        To enable: pip install carton-maya  (or uvx carton-maya)
+    goto :skip_carton
+)
+
+echo.
+echo ============================================
+echo Carton Packaging
+echo ============================================
+
+set CARTON_SRC=%SCRIPT_DIR%\carton
+set CARTON_STAGE=%SCRIPT_DIR%\dist-carton
+set CARTON_OUT=%SCRIPT_DIR%\dist-carton-out
+
+if not exist "%CARTON_SRC%\package.json" (
+    echo [WARNING] %CARTON_SRC%\package.json not found - skipping carton step.
+    goto :skip_carton
+)
+
+REM Reset staging
+if exist "%CARTON_STAGE%" rmdir /s /q "%CARTON_STAGE%"
+mkdir "%CARTON_STAGE%"
+mkdir "%CARTON_STAGE%\scripts"
+
+REM Seed manifests from source-controlled carton/
+copy "%CARTON_SRC%\package.json" "%CARTON_STAGE%\package.json" >nul
+copy "%CARTON_SRC%\exattr-maya.mod" "%CARTON_STAGE%\exattr-maya.mod" >nul
+
+REM Drop each Maya version's .mll under plug-ins/<ver>/exattr-maya.mll
+for %%v in (2025 2026 2027) do (
+    if exist "%DIST_DIR%\exattr-maya-%%v.mll" (
+        if not exist "%CARTON_STAGE%\plug-ins\%%v" mkdir "%CARTON_STAGE%\plug-ins\%%v"
+        copy "%DIST_DIR%\exattr-maya-%%v.mll" "%CARTON_STAGE%\plug-ins\%%v\exattr-maya.mll" >nul
+    )
+)
+
+REM MEL scripts
+copy "%SCRIPT_DIR%\scripts\*.mel" "%CARTON_STAGE%\scripts\" >nul 2>&1
+
+REM Lint then pack
+python -m carton package lint "%CARTON_STAGE%"
+if errorlevel 1 (
+    echo [ERROR] Carton lint failed - aborting zip step.
+    goto :skip_carton
+)
+
+python -m carton package pack "%CARTON_STAGE%" --out "%CARTON_OUT%"
+if errorlevel 1 (
+    echo [ERROR] Carton pack failed.
+    goto :skip_carton
+)
+
+echo.
+echo Carton zip:
+for %%f in ("%CARTON_OUT%\exattr-maya-*.zip") do echo   [OK] %%f
+
+:skip_carton
+
 endlocal
 exit /b %FAIL_COUNT%
